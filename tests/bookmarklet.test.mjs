@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildBookmarklet,
   createSubmission,
   normalizeNullableNumber,
   parseIdentityText,
@@ -69,4 +70,29 @@ test("createSubmission preserves all score metrics", () => {
       },
     ],
   });
+});
+
+test("buildBookmarklet creates one universal u-folio collector", () => {
+  const result = buildBookmarklet(
+    "https://script.google.com/macros/s/EXAMPLE_DEPLOYMENT/exec",
+  );
+
+  assert.match(result, /^javascript:/);
+  const source = decodeURIComponent(result.slice("javascript:".length));
+  assert.match(source, /dent_summary\/list/);
+  assert.match(source, /dent_summary\/getSummaryData/);
+  assert.match(source, /mode:\s*["']no-cors["']/);
+  assert.match(source, /전송 요청 완료/);
+  assert.doesNotMatch(source, /login_id|달신 아이디|2024-12345/);
+});
+
+test("buildBookmarklet rejects missing or non-Apps-Script URLs", () => {
+  assert.throws(
+    () => buildBookmarklet(""),
+    /Apps Script 웹앱 URL이 올바르지 않습니다/,
+  );
+  assert.throws(
+    () => buildBookmarklet("http://example.com/submit"),
+    /Apps Script 웹앱 URL이 올바르지 않습니다/,
+  );
 });
