@@ -38,3 +38,17 @@ test("real roster stays in ignored private files", () => {
     .join("\n");
   assert.doesNotMatch(publicText, /^\d{1,3}\t\d{4}-\d{5}\t[가-힣]{2,4}$/m);
 });
+
+test("installer page exposes the required accessible controls", () => {
+  const html = readFileSync("index.html", "utf8");
+  for (const id of [
+    "bookmarklet-link",
+    "bookmarklet-code",
+    "copy-code",
+    "config-status",
+  ]) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+  assert.match(html, /https:\/\/sdent\.u-folio\.com\/st\/dentistry-3\/dent_summary/);
+  assert.doesNotMatch(html, /<form\b|href=["']\/login/);
+});

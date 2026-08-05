@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="로그인된 u-folio 세션에서 본인 임상실습 점수를 전송하는 공통 북마클릿 설치 페이지"
+    />
+    <title>유폴리오 점수 전송</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="hero">
+        <p class="eyebrow">U-FOLIO SCORE COLLECTOR</p>
+        <h1>내 유폴리오 점수를<br /><span>한 번에 전송하세요.</span></h1>
+        <p class="hero-copy">
+          자체 회원가입이나 로그인은 없습니다. 모두가 같은 북마클릿을 설치하고,
+          현재 로그인된 u-folio의 이름·학번과 임상실습 항목을 자동으로 가져옵니다.
+        </p>
+      </header>
+
+      <section class="card install-card" aria-labelledby="install-title">
+        <div class="section-heading">
+          <span class="step-number">01</span>
+          <div>
+            <h2 id="install-title">북마클릿 설치</h2>
+            <p>아래 버튼을 브라우저 즐겨찾기 바로 끌어다 놓으세요.</p>
+          </div>
+        </div>
+
+        <p id="config-status" class="status" role="status" aria-live="polite">
+          설치 설정을 확인하는 중입니다…
+        </p>
+
+        <div class="drop-zone">
+          <a
+            id="bookmarklet-link"
+            class="bookmarklet-button"
+            draggable="true"
+            aria-describedby="drag-help"
+          >
+            <span aria-hidden="true">↗</span>
+            유폴리오 점수 전송
+          </a>
+          <p id="drag-help">
+            버튼을 <strong>클릭하지 말고 드래그</strong>하세요.<br />즐겨찾기 바 표시:
+            <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>
+          </p>
+        </div>
+
+        <details class="manual-install">
+          <summary>드래그가 안 되나요? 수동 등록</summary>
+          <ol>
+            <li>브라우저 즐겨찾기에서 새 페이지를 추가합니다.</li>
+            <li>이름은 자유롭게 입력합니다.</li>
+            <li>아래 코드를 URL 칸에 전부 붙여넣습니다.</li>
+          </ol>
+          <textarea
+            id="bookmarklet-code"
+            aria-label="수동 등록용 북마클릿 코드"
+            readonly
+            spellcheck="false"
+          ></textarea>
+          <button id="copy-code" class="copy-button" type="button">코드 복사</button>
+        </details>
+      </section>
+
+      <section class="card" aria-labelledby="run-title">
+        <div class="section-heading">
+          <span class="step-number">02</span>
+          <div>
+            <h2 id="run-title">유폴리오에서 실행</h2>
+            <p>설치는 한 번만, 점수 전송은 필요할 때마다 실행합니다.</p>
+          </div>
+        </div>
+
+        <ol class="run-steps">
+          <li>
+            <span>1</span>
+            <div>
+              <strong>u-folio 로그인</strong>
+              <p>평소처럼 본인 계정으로 로그인합니다.</p>
+            </div>
+          </li>
+          <li>
+            <span>2</span>
+            <div>
+              <strong>임상실습요약표 열기</strong>
+              <p>
+                <a
+                  href="https://sdent.u-folio.com/st/dentistry-3/dent_summary"
+                  target="_blank"
+                  rel="noreferrer"
+                  >요약표 바로가기</a
+                >
+              </p>
+            </div>
+          </li>
+          <li>
+            <span>3</span>
+            <div>
+              <strong>즐겨찾기의 북마클릿 실행</strong>
+              <p>감지된 이름·학번과 실습차수를 확인하고 전송합니다.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <aside class="privacy-note" aria-labelledby="privacy-title">
+        <span class="privacy-icon" aria-hidden="true">✓</span>
+        <div>
+          <h2 id="privacy-title">비밀번호와 로그인 쿠키는 보내지 않습니다.</h2>
+          <p>
+            북마클릿은 현재 브라우저 안에서 u-folio 점수만 읽습니다. 이름·학번과
+            점수 항목은 관리자 전용 시트로 전송되며, 파일은 학생에게 공유되지
+            않습니다. 브라우저 제약상 “전송 요청 완료”와 실제 저장 성공은 다를 수
+            있으므로 최종 여부는 관리자 전송기록에서 확인합니다.
+          </p>
+        </div>
+      </aside>
+
+      <footer>유폴리오 점수 수집 전용 · 자체 계정 없음</footer>
+    </main>
+    <script type="module" src="./site.js"></script>
+  </body>
+</html>
