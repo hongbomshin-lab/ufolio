@@ -23,3 +23,18 @@ test("package has no external dependencies", () => {
   assert.deepEqual(pkg.dependencies ?? {}, {});
   assert.deepEqual(pkg.devDependencies ?? {}, {});
 });
+
+test("real roster stays in ignored private files", () => {
+  const ignore = readFileSync(".gitignore", "utf8");
+  assert.match(ignore, /^private\/student-roster\.tsv$/m);
+  assert.match(ignore, /^private\/\*\.gs$/m);
+
+  const publicFiles = ["private/README.md", "apps-script/README.md"];
+  for (const file of publicFiles) {
+    assert.equal(existsSync(file), true, `${file} should explain private setup`);
+  }
+  const publicText = publicFiles
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
+  assert.doesNotMatch(publicText, /^\d{1,3}\t\d{4}-\d{5}\t[가-힣]{2,4}$/m);
+});
