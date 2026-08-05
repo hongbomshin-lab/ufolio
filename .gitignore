@@ -1,0 +1,15 @@
+.env
+.env.*
+.next/
+node_modules/
+.vercel/
+.claude/
+.omc/
+8월 달신 결과/
+docs/guide.html
+next-env.d.ts
+tsconfig.tsbuildinfo
+private/student-roster.tsv
+private/*.gs
+coverage/
+
