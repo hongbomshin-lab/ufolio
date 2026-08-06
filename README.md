@@ -1,182 +1,125 @@
-# 유폴리오 점수 수집기
+# U-FOLIO 현황 통합기
 
-로그인된 u-folio 세션에서 본인의 이름·학번과 임상실습 점수를 가져와 관리자 전용 Google Spreadsheet로 전송하는 공통 북마클릿입니다.
+로그인된 U-FOLIO 임상실습요약표에서 학생 본인의 전체 점수를 수집하고, 각 과 케이스장이 계속 사용 중인 Google Sheets 집계값과 관리자 전용 파일에서 비교하는 시스템입니다.
 
-- 자체 회원가입·로그인 없음
-- 학생별 북마클릿 없음: 모두 같은 코드 사용
-- u-folio 비밀번호·세션 쿠키·인증 토큰 전송 안 함
-- Next.js·React·Supabase·외부 npm 의존성 없음
-- 정적 Vercel 페이지 + Spreadsheet-bound Apps Script만 사용
+- 케이스장 원본 시트는 그대로 유지합니다.
+- 학생이 별도 파일에 같은 값을 다시 입력하지 않습니다.
+- 원본에서는 출석번호·이름과 설정된 집계 열만 읽습니다.
+- 중앙에는 학생별 집계값만 저장하고 환자·담당자·날짜·메모는 저장하지 않습니다.
+- 한 원본이 실패해도 나머지는 갱신하며, 실패 소스는 마지막 정상 집계를 `원본노후`로 유지합니다.
+- 자체 로그인·Supabase·외부 데이터베이스·외부 npm 의존성이 없습니다.
+
+## 최종 구조
+
+```text
+U-FOLIO 북마클릿 ──전송──> ① 유폴리오 사이트 인증
+                                    │
+각 과 케이스장 Google Sheets ──읽기 전용 집계──> ② 유폴리오 통합관리자
+                                    │                 │
+                                    └── 최신값 비교 ──┘
+```
+
+운영 파일은 정확히 두 개입니다.
+
+1. `01_유폴리오_사이트인증.xlsx`: 학생명단, 206개 마스터, 북마클릿 수신 RAW·로그
+2. `02_유폴리오_통합관리자.xlsx`: 11개 원본 연결, 53개 초기 매핑, 최신 집계·비교·진단
+
+로컬 결과물은 `outputs/ufolio-case-integration-20260806/`에 생성되며 Git에서 제외됩니다.
 
 ## 저장소 구성
 
 ```text
-index.html              북마클릿 설치·사용 안내
-styles.css              정적 페이지 디자인
-config.js               Apps Script /exec URL 설정
-bookmarklet.js          u-folio 추출 및 전송 코드
-site.js                 설치 페이지 동작
-apps-script/Code.gs     Spreadsheet 수신기
-apps-script/SystemSetup.gs  ②·③ 파일 생성, 최신값·불일치 동기화, 행 보호
-apps-script/README.md   Apps Script 설치 상세
-docs/GOOGLE_SHEETS_SETUP.md 실제 Google Sheets 설치 순서
-scripts/                실제 데이터로 xlsx 생성·검증
-private/README.md       실제 명단을 공개하지 않는 입력 절차
-tests/                  Node 내장 테스트
+index.html                         북마클릿 설치·사용 안내
+styles.css / site.js / config.js  정적 사이트
+bookmarklet.js                     U-FOLIO 추출·전송 코드
+apps-script/Code.gs               웹 앱 수신기
+apps-script/CaseSheetCore.gs      제한 집계식·비교 코어
+apps-script/CaseSheetDefaults.gs  11개 연결·53개 초기 매핑
+apps-script/CaseSheetSync.gs      읽기 전용 동기화·실패 격리
+apps-script/SystemSetup.gs        관리자 파일 생성·메뉴·새벽 3시 트리거
+config/ufolio-master-items.json   비식별 206개 마스터 항목
+docs/GOOGLE_SHEETS_SETUP.md       실제 설치·운영 가이드
+scripts/                           두 xlsx 생성·전 시트 검증
+tests/                             Node 내장 테스트
 ```
 
-실제 명단은 로컬의 Git 제외 파일인 `private/student-roster.tsv`와 `private/SeedRoster.gs`에 있습니다. 현재 제공된 90행을 그대로 담았고, 두 파일은 공개 저장소에 포함되지 않습니다.
+실제 학생명단, 생성된 운영 파일, 현황시트 원본과 URL은 공개 저장소에 포함되지 않습니다.
 
-## 1. 로컬 검증
-
-Node.js만 있으면 패키지 설치 없이 테스트할 수 있습니다.
+## 로컬 검증
 
 ```powershell
 npm.cmd test
 ```
 
-PowerShell 실행 정책이 `npm.ps1`을 허용하는 환경에서는 `npm test`도 동일하게 동작합니다.
+검증 범위에는 북마클릿, 수신 검증, 206개 마스터 키, 11개 연결, 제한 집계식, 이름 대조, 공란과 0 구분, 소스별 원자적 갱신, 마지막 정상값 유지, 두 워크북 패키지 구조가 포함됩니다.
 
-검증 범위:
+## Google Sheets 설치 요약
 
-- `이름(학번)` 자동 파싱과 애매한 후보 거부
-- 0·소수점·`미설정` 구분
-- 모든 점수 필드가 포함된 전송 페이로드
-- 개인값이 없는 공통 북마클릿 생성
-- Apps Script URL 검증
-- 명단 매핑·미등록 학번·이름 불일치 거부
-- 최대 5,000항목 제한과 수식 주입 방어
-- 명단 파일의 Git 제외 상태
-- 설치 페이지의 설정 전·후 동작
+1. `01_유폴리오_사이트인증.xlsx`를 관리자 Google Drive에서 Google Sheets로 변환합니다.
+2. Apps Script 프로젝트에 아래 파일을 순서대로 각각 추가해 전체 내용을 붙여넣습니다.
 
-## 2. Google Sheets 3개 만들기
+   1. `Code.gs`
+   2. `CaseSheetCore.gs`
+   3. `CaseSheetDefaults.gs`
+   4. `CaseSheetSync.gs`
+   5. `SystemSetup.gs`
 
-1. 로컬 `outputs/ufolio-score-system-20260806/01_유폴리오_사이트인증.xlsx`를 Google Drive에 업로드해 Google Sheets로 변환합니다.
-2. `확장 프로그램 → Apps Script`에서 [Code.gs](apps-script/Code.gs)와 [SystemSetup.gs](apps-script/SystemSetup.gs)를 각각 붙여넣습니다.
-3. `createLinkedWorkbooks()`를 한 번 실행합니다.
-4. 실제 명단 90명과 실제 항목 206개를 바탕으로 ② 수기입력·③ 관리자 파일이 Google Drive에 생성됩니다.
-5. 이후 단계는 [Google Sheets 실제 설치 가이드](docs/GOOGLE_SHEETS_SETUP.md)를 따릅니다.
+3. `createIntegrationAdminWorkbook()`을 한 번 실행합니다.
+4. 생성된 ② 파일의 `현황시트연결` E열에 원본 Google Sheets URL 11개를 입력합니다.
+5. 관리자 Google 계정을 각 원본에 뷰어로 공유합니다.
+6. `현황시트 연결 검사` → `항목매핑`의 `검토필요` 확인 → `지금 전체 동기화` 순서로 실행합니다.
+7. 결과가 정상일 때 `매일 새벽 3시 동기화 켜기`를 실행합니다.
 
-### 실제 학생명단 90명
+세부 절차와 상태별 조치는 [Google Sheets 실제 설치 가이드](docs/GOOGLE_SHEETS_SETUP.md)를 따릅니다.
 
-생성된 ① xlsx에 이미 헤더 제외 90행이 들어 있습니다. 공개 저장소에는 xlsx와 실제 명단 TSV가 모두 포함되지 않도록 `outputs/`와 `private/student-roster.tsv`를 Git에서 제외했습니다.
+## 웹 앱과 정적 사이트
 
-`seedRoster()`는 기존 데이터가 있으면 덮어쓰지 않고 중단합니다. 98~100번의 학번·이름이 확정되면 `학생명단` 끝에 `출석번호 | 학번 | 이름` 순서로 직접 추가하면 됩니다. `Code.gs` 변경이나 재배포는 필요하지 않습니다.
-
-## 3. Apps Script 웹 앱 배포
-
-Apps Script 편집기에서 다음과 같이 배포합니다.
-
-1. `배포 → 새 배포`
-2. 유형: `웹 앱`
-3. 설명: `유폴리오 점수 수신기`
-4. 실행: `나`
-5. 액세스: `모든 사용자`
-6. `배포` 후 권한 승인
-7. `/exec`로 끝나는 웹 앱 URL 복사
-
-배포 URL 예시 형식:
-
-```text
-https://script.google.com/macros/s/배포ID/exec
-```
-
-이 URL은 북마클릿에 포함되므로 비밀값이 아닙니다.
-
-## 4. 정적 사이트에 수신 URL 연결
-
-[config.js](config.js)의 빈 문자열을 실제 `/exec` URL로 바꿉니다.
+Apps Script를 `웹 앱`, 실행 사용자 `나`, 액세스 `모든 사용자`로 배포한 뒤 `/exec` URL을 [config.js](config.js)에 입력합니다.
 
 ```js
 export const WEB_APP_URL = "https://script.google.com/macros/s/배포ID/exec";
 ```
 
-다시 검증합니다.
+북마클릿 화면의 “전송 요청 완료”는 브라우저의 `no-cors` 특성상 저장 성공을 보증하지 않습니다. 최종 성공은 ① 파일의 `전송기록`에서 확인합니다.
 
-```powershell
-npm.cmd test
-```
+## 비교 상태
 
-URL이 비어 있거나 잘못되면 설치 페이지가 북마클릿 설치를 차단하고 설정 오류를 표시합니다.
+| 상태 | 의미 |
+|---|---|
+| `일치` | 현황 인증대상값과 U-FOLIO 최신값이 같음 |
+| `반영대기` | 현황값이 더 큼. 진행했지만 U-FOLIO 반영 전일 가능성 |
+| `현황누락의심` | U-FOLIO 값이 더 큼. 원본 집계나 매핑 확인 필요 |
+| `유폴리오미인증` | 현황값은 있으나 대상 U-FOLIO 최신값이 없음 |
+| `매핑대기` | `검토상태`가 아직 `승인`이 아님 |
+| `원본오류` | URL·권한·탭·열·수식·값 오류 |
+| `학생불일치` | 출석번호가 없거나 이름이 학생명단과 다름 |
+| `원본노후` | 이번 읽기에 실패해 마지막 정상 집계를 사용 중 |
 
-## 5. GitHub 저장소
+## 새 현황시트 추가
 
-이 프로젝트는 기존 달신 저장소와 분리된 독립 저장소에서 관리합니다.
+대부분은 원본을 수정하지 않고 ② 파일에서 처리합니다.
+
+1. `현황시트연결`에 소스키, 과, URL, 탭명, 출석번호·이름 열, 시작행을 추가합니다.
+2. `항목매핑`에 제한 집계식과 U-FOLIO 대상 키를 추가합니다.
+3. 연결 검사 후 `검토필요` 상태에서 시험하고, 값이 확인된 매핑만 `승인`으로 바꿉니다.
+
+구조가 지나치게 복잡한 경우에만 원본에 숨김 `_UFOLIO_EXPORT` 탭을 둘 수 있습니다. 표준 열은 `A 출석번호`, `B 이름`, `C 완료`, `D 예정`, `E 인증대상`이며, 환자 식별정보는 포함하지 않습니다.
+
+## 개인정보와 정확한 한계
+
+- 공개 GitHub와 Vercel에는 학생명단·점수·원본 URL·환자정보가 없습니다.
+- U-FOLIO 수신은 학번과 이름이 비공개 명단에 모두 일치하고 항목이 활성 마스터에 있어야 저장됩니다.
+- 북마클릿은 비밀번호·세션 쿠키·인증 토큰을 전송하지 않습니다.
+- 공개 웹 앱 URL로 조작된 POST를 암호학적으로 완전히 막을 수는 없습니다. U-FOLIO가 서버 검증용 서명 API를 제공하지 않는 한 이 한계는 남습니다.
+- 케이스 원본의 환자 단위 상세는 중앙에 복사하지 않으며, 단계형 시트도 상세 열을 건너뛰고 집계 열만 읽습니다.
+
+## 배포 저장소
+
+이 프로젝트는 기존 시스템과 분리된 독립 저장소입니다.
 
 ```powershell
 git clone https://github.com/hongbomshin-lab/ufolio.git
 cd ufolio
 ```
 
-공개 저장소에 개인정보나 생성된 운영 파일이 들어가지 않았는지 변경을 올리기 전에 확인합니다.
-
-```powershell
-git ls-files
-git check-ignore -v private/student-roster.tsv private/SeedRoster.gs
-```
-
-두 비공개 파일과 `outputs/`는 `git ls-files`에 없어야 하고 `git check-ignore`에는 나타나야 합니다.
-
-## 6. 새 Vercel 프로젝트 배포
-
-1. Vercel에서 `Add New → Project`를 선택합니다.
-2. 새 GitHub 저장소를 가져옵니다.
-3. Framework Preset은 `Other`를 선택합니다.
-4. Build Command는 비워 둡니다.
-5. Output Directory도 비워 둡니다.
-6. 배포합니다.
-
-사이트는 정적 파일만 제공하므로 서버 환경변수나 데이터베이스 연결이 없습니다.
-
-## 7. 실제 통합 확인
-
-전체 공지 전에 계정 한 개로 확인합니다.
-
-1. Vercel 설치 페이지에서 북마클릿 버튼을 즐겨찾기 바로 드래그합니다.
-2. [u-folio 임상실습요약표](https://sdent.u-folio.com/st/dentistry-3/dent_summary)에 로그인합니다.
-3. 즐겨찾기의 `유폴리오 점수 전송`을 실행합니다.
-4. 화면 상단의 이름·학번이 자동 감지됐는지 확인합니다.
-5. 실습차수를 선택하고 `추출하고 전송`을 누릅니다.
-6. 과·항목 수와 표본 점수를 u-folio 화면과 비교합니다.
-7. Spreadsheet `전송기록`에 성공 행이 생겼는지 확인합니다.
-8. `RAW`에 같은 전송 ID로 모든 항목이 추가됐는지 확인합니다.
-9. 한 번 더 실행해 새 전송 ID로 누적되는지 확인합니다.
-
-브라우저의 `no-cors` 제약 때문에 북마클릿의 “전송 요청 완료”는 Apps Script 저장 성공을 보증하지 않습니다. 최종 성공은 반드시 `전송기록`에서 확인합니다.
-
-## RAW 데이터
-
-| 열 | 내용 |
-|---|---|
-| A | 수신시각 |
-| B | 전송 ID |
-| C | 출석번호 |
-| D | 학번 |
-| E | 이름 |
-| F | 실습차수 |
-| G | 과 |
-| H | 메뉴/구분 |
-| I | 항목 |
-| J | 승인 수 |
-| K | 환자 수 |
-| L | 점수 |
-| M | 점수 원문 |
-
-재전송은 이전 데이터를 삭제하지 않고 새 행으로 누적됩니다. 후속 비교에서 최신값을 고를 때는 `(출석번호 + 실습차수 + 과 + 메뉴/구분 + 항목)`을 키로 삼아 가장 최근 수신시각의 행을 사용합니다.
-
-## 보안과 개인정보 경계
-
-- Spreadsheet와 실제 명단은 관리자만 접근합니다.
-- 공개 GitHub와 Vercel에는 실제 명단이나 점수가 없습니다.
-- 북마클릿은 u-folio 비밀번호, 세션 쿠키, 인증 토큰을 외부로 전송하지 않습니다.
-- 학번과 이름이 비공개 명단에 모두 일치해야 `RAW`에 저장됩니다.
-- Apps Script 공개 URL은 외부 POST를 받을 수 있으므로, 기술적으로 조작된 요청을 완전히 막지는 못합니다.
-- u-folio가 외부 검증 가능한 서명 토큰이나 인증 API를 제공하지 않는 한 “실제 u-folio 세션에서 왔다”는 사실을 암호학적으로 증명할 수 없습니다.
-- 따라서 `전송 ID`, 수신시각, 항목 수, 거부 사유를 `전송기록`에 남겨 이상 전송을 추적합니다.
-
-## 운영 업데이트
-
-- 학생 추가: `학생명단` 시트 행 추가만 필요
-- Apps Script 코드 변경: 기존 웹 앱 배포를 새 버전으로 갱신
-- 새 `/exec` URL 발급: `config.js` 변경 후 Vercel 재배포
-- 북마클릿 코드 변경: 정적 사이트 재배포 후 학생이 북마클릿을 다시 설치해야 함
+정적 Vercel 프로젝트는 Framework Preset `Other`, Build Command·Output Directory 공란으로 배포합니다.
