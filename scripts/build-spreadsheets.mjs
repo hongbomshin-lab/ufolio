@@ -1,17 +1,20 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import vm from "node:vm";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const [rosterPath, itemsPath, outputDir] = process.argv.slice(2);
-const artifactEntry = process.env.ARTIFACT_TOOL_ENTRY;
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const [rosterPath, outputDirArg] = process.argv.slice(2);
+const outputDir = outputDirArg ? path.resolve(outputDirArg) : path.join(rootDir, "outputs", "ufolio-case-integration-20260806");
+const masterPath = path.join(rootDir, "config/ufolio-master-items.json");
+const defaultsPath = path.join(rootDir, "apps-script/CaseSheetDefaults.gs");
 
-if (!rosterPath || !itemsPath || !outputDir || !artifactEntry) {
-  throw new Error(
-    "사용법: ARTIFACT_TOOL_ENTRY=<artifact_tool.mjs> node scripts/build-spreadsheets.mjs <명단.tsv> <항목.txt> <출력폴더>",
-  );
-}
+if (!rosterPath) throw new Error("사용법: node scripts/build-spreadsheets.mjs <명단.tsv> [출력폴더]");
 
-const { SpreadsheetFile, Workbook } = await import(pathToFileURL(artifactEntry).href);
+const artifactModule = process.env.ARTIFACT_TOOL_ENTRY
+  ? await import(pathToFileURL(process.env.ARTIFACT_TOOL_ENTRY).href)
+  : await import("@oai/artifact-tool");
+const { SpreadsheetFile, Workbook } = artifactModule;
 
 const palette = {
   navy: "#17365D",
@@ -20,76 +23,62 @@ const palette = {
   paleGreen: "#E2F0D9",
   paleYellow: "#FFF2CC",
   paleRed: "#FCE4D6",
+  lavender: "#D9D2E9",
   ink: "#1F2937",
-  muted: "#667085",
   line: "#D0D5DD",
   white: "#FFFFFF",
 };
 
-function parseRoster(text) {
-  const rows = text.trim().split(/\r?\n/).slice(1).map((line) => line.split("\t"));
-  return rows.map(([attendanceNo, studentId, name]) => [Number(attendanceNo), studentId, name]);
-}
+const rawHeaders = ["수신시각", "전송 ID", "출석번호", "학번", "이름", "실습차수", "과", "메뉴/구분", "항목", "승인 수", "환자 수", "점수", "점수 원문"];
+const logHeaders = ["수신시각", "전송 ID", "출석번호", "학번", "이름", "항목 수", "상태", "상세 사유"];
+const masterHeaders = ["활성", "실습차수", "과", "메뉴/구분", "항목", "비교사용", "비교기준", "표시명"];
+const snapshotHeaders = ["동기화시각", "소스키", "매핑키", "출석번호", "학번", "이름", "과", "현황표시명", "완료값", "예정값", "인증대상값", "검토상태", "측정값", "U-FOLIO 대상", "집계방식", "우선순위", "상태", "노후"];
+const comparisonHeaders = ["출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "U-FOLIO 값", "차이", "상태", "소스키", "매핑키", "동기화시각"];
+const unmappedHeaders = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
+const diagnosticHeaders = ["시각", "소스키", "행", "상태", "상세"];
+const syncLogHeaders = ["시각", "정상 소스", "실패 소스", "현황 집계", "비교 건수", "상태"];
 
-function parseItems(text) {
-  return text.trimEnd().split(/\r?\n/).filter(Boolean).map((line, index) => {
-    const cells = line.split(/\t+| {2,}/).map((value) => value.trim());
-    if (cells.length !== 4 && cells.length !== 7) {
-      throw new Error(`${index + 1}번째 항목 행의 열 수가 올바르지 않습니다: ${cells.length}`);
-    }
-    const [practice, department, menu, item] = cells;
-    return { practice, department, menu, item };
+function parseRoster(text) {
+  return text.trim().split(/\r?\n/).slice(1).filter(Boolean).map((line) => {
+    const [attendanceNo, studentId, name] = line.split("\t");
+    return [Number(attendanceNo), String(studentId).trim(), String(name).trim()];
   });
 }
 
-const roster = parseRoster(await fs.readFile(rosterPath, "utf8"));
-const items = parseItems(await fs.readFile(itemsPath, "utf8"));
-const departments = [...new Set(items.map((row) => row.department))];
-const itemsByDepartment = new Map(
-  departments.map((department) => [department, items.filter((row) => row.department === department)]),
-);
+function loadDefaults(source) {
+  const context = vm.createContext({ console });
+  vm.runInContext(source, context, { filename: "apps-script/CaseSheetDefaults.gs" });
+  return {
+    connectionHeaders: Array.from(context.CASE_CONNECTION_HEADERS),
+    mappingHeaders: Array.from(context.CASE_MAPPING_HEADERS),
+    connections: context.case_defaultConnections_().map((row) => Array.from(row)),
+    mappings: context.case_defaultMappings_().map((row) => Array.from(row)),
+  };
+}
 
-if (new Set(roster.map((row) => row[1])).size !== roster.length) {
-  throw new Error("명단에 중복 학번이 있습니다.");
+const roster = parseRoster(await fs.readFile(path.resolve(rosterPath), "utf8"));
+const masterConfig = JSON.parse(await fs.readFile(masterPath, "utf8"));
+const items = Object.entries(masterConfig.departments).flatMap(([department, rows]) =>
+  rows.map(([menu, item]) => ({ practice: masterConfig.practice, department, menu, item })),
+);
+const defaults = loadDefaults(await fs.readFile(defaultsPath, "utf8"));
+
+if (items.length !== 206) throw new Error(`마스터 항목이 206개가 아닙니다: ${items.length}`);
+if (new Set(items.map((row) => [row.practice, row.department, row.menu, row.item].join("|"))).size !== 206) {
+  throw new Error("마스터 항목 키가 중복되었습니다.");
 }
-if (new Set(items.map((row) => [row.practice, row.department, row.menu, row.item].join("|"))).size !== items.length) {
-  throw new Error("마스터 항목에 중복 키가 있습니다.");
-}
+if (new Set(roster.map((row) => row[1])).size !== roster.length) throw new Error("명단에 중복 학번이 있습니다.");
+if (defaults.connections.length !== 11) throw new Error("기본 현황시트 연결이 11개가 아닙니다.");
 
 function colLetter(index) {
-  let n = index;
+  let value = index;
   let result = "";
-  while (n > 0) {
-    n -= 1;
-    result = String.fromCharCode(65 + (n % 26)) + result;
-    n = Math.floor(n / 26);
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCharCode(65 + (value % 26)) + result;
+    value = Math.floor(value / 26);
   }
   return result;
-}
-
-function qSheet(name) {
-  return `'${name.replaceAll("'", "''")}'`;
-}
-
-function styleTitle(sheet, title, subtitle, endCol = "H") {
-  sheet.showGridLines = false;
-  sheet.getRange(`A1:${endCol}1`).merge();
-  sheet.getRange("A1").values = [[title]];
-  sheet.getRange(`A1:${endCol}1`).format = {
-    fill: palette.navy,
-    font: { bold: true, color: palette.white, size: 16 },
-    verticalAlignment: "center",
-  };
-  sheet.getRange(`A1:${endCol}1`).format.rowHeightPx = 34;
-  sheet.getRange(`A2:${endCol}2`).merge();
-  sheet.getRange("A2").values = [[subtitle]];
-  sheet.getRange(`A2:${endCol}2`).format = {
-    fill: palette.paleBlue,
-    font: { color: palette.ink, size: 10 },
-    wrapText: true,
-    verticalAlignment: "center",
-  };
-  sheet.getRange(`A2:${endCol}2`).format.rowHeightPx = 42;
 }
 
 function styleHeader(range, fill = palette.blue) {
@@ -103,7 +92,7 @@ function styleHeader(range, fill = palette.blue) {
   };
 }
 
-function styleTableBody(range) {
+function styleBody(range) {
   range.format = {
     font: { color: palette.ink },
     verticalAlignment: "center",
@@ -114,265 +103,198 @@ function styleTableBody(range) {
   };
 }
 
-function addGuideSheet(workbook, title, rows) {
+function styleTitle(sheet, title, subtitle, lastColumn = "H") {
+  sheet.showGridLines = false;
+  sheet.getRange(`A1:${lastColumn}1`).merge();
+  sheet.getRange("A1").values = [[title]];
+  sheet.getRange(`A1:${lastColumn}1`).format = {
+    fill: palette.navy,
+    font: { bold: true, color: palette.white, size: 16 },
+    verticalAlignment: "center",
+  };
+  sheet.getRange(`A1:${lastColumn}1`).format.rowHeightPx = 36;
+  sheet.getRange(`A2:${lastColumn}2`).merge();
+  sheet.getRange("A2").values = [[subtitle]];
+  sheet.getRange(`A2:${lastColumn}2`).format = {
+    fill: palette.paleBlue,
+    font: { color: palette.ink, size: 10 },
+    wrapText: true,
+    verticalAlignment: "center",
+  };
+  sheet.getRange(`A2:${lastColumn}2`).format.rowHeightPx = 44;
+}
+
+function addGuide(workbook, title, subtitle, lines) {
   const sheet = workbook.worksheets.add("사용안내");
-  styleTitle(sheet, title, "파란 셀은 시스템 영역, 노란 셀은 관리자가 직접 확인하거나 입력할 영역입니다.", "F");
+  styleTitle(sheet, title, subtitle, "H");
   sheet.getRange("A4:B4").values = [["순서", "할 일"]];
   styleHeader(sheet.getRange("A4:B4"));
-  sheet.getRange(`A5:B${rows.length + 4}`).values = rows.map((text, index) => [index + 1, text]);
-  styleTableBody(sheet.getRange(`A5:B${rows.length + 4}`));
-  sheet.getRange(`B5:B${rows.length + 4}`).format.wrapText = true;
+  sheet.getRange(`A5:B${lines.length + 4}`).values = lines.map((line, index) => [index + 1, line]);
+  styleBody(sheet.getRange(`A5:B${lines.length + 4}`));
+  sheet.getRange(`B5:B${lines.length + 4}`).format.wrapText = true;
   sheet.getRange("A:A").format.columnWidthPx = 64;
-  sheet.getRange("B:B").format.columnWidthPx = 680;
+  sheet.getRange("B:B").format.columnWidthPx = 720;
   sheet.freezePanes.freezeRows(4);
   return sheet;
 }
 
-function addRosterSheet(workbook, includeEmail = true) {
-  const sheet = workbook.worksheets.add("학생명단");
-  const headers = includeEmail ? ["출석번호", "학번", "이름", "이메일(선택)"] : ["출석번호", "학번", "이름"];
-  sheet.getRange(`A1:${colLetter(headers.length)}1`).values = [headers];
-  styleHeader(sheet.getRange(`A1:${colLetter(headers.length)}1`));
-  const values = roster.map((row) => includeEmail ? [...row, ""] : row);
-  sheet.getRange(`A2:${colLetter(headers.length)}${values.length + 1}`).values = values;
-  styleTableBody(sheet.getRange(`A2:${colLetter(headers.length)}${values.length + 1}`));
-  sheet.getRange(`B2:B${values.length + 1}`).format.numberFormat = "@";
-  sheet.getRange("A:A").format.columnWidthPx = 82;
-  sheet.getRange("B:B").format.columnWidthPx = 120;
-  sheet.getRange("C:C").format.columnWidthPx = 100;
-  if (includeEmail) {
-    sheet.getRange("D:D").format.columnWidthPx = 230;
-    sheet.getRange(`D2:D${values.length + 1}`).format.fill = palette.paleYellow;
+function addTableSheet(workbook, name, headers, rows = [], widths = []) {
+  const sheet = workbook.worksheets.add(name);
+  const lastCol = colLetter(headers.length);
+  sheet.getRange(`A1:${lastCol}1`).values = [headers];
+  styleHeader(sheet.getRange(`A1:${lastCol}1`));
+  if (rows.length > 0) {
+    sheet.getRange(`A2:${lastCol}${rows.length + 1}`).values = rows;
+    styleBody(sheet.getRange(`A2:${lastCol}${rows.length + 1}`));
   }
+  widths.forEach((width, index) => {
+    if (width) sheet.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width;
+  });
   sheet.freezePanes.freezeRows(1);
   sheet.showGridLines = false;
   return sheet;
 }
 
-function addMasterSheet(workbook) {
-  const sheet = workbook.worksheets.add("마스터항목");
-  const headers = ["활성", "실습차수", "과", "메뉴/구분", "항목", "수기대상", "비교기준", "수기표시명"];
-  const values = items.map((row) => ["Y", row.practice, row.department, row.menu, row.item, "N", "승인수", `${row.menu} | ${row.item}`]);
-  sheet.getRange("A1:H1").values = [headers];
-  styleHeader(sheet.getRange("A1:H1"));
-  sheet.getRange(`A2:H${values.length + 1}`).values = values;
-  styleTableBody(sheet.getRange(`A2:H${values.length + 1}`));
-  sheet.getRange(`A2:A${values.length + 1}`).dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
-  sheet.getRange(`F2:F${values.length + 1}`).dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
-  sheet.getRange(`G2:G${values.length + 1}`).dataValidation = { rule: { type: "list", values: ["승인수", "환자수", "점수"] } };
-  sheet.getRange(`F2:H${values.length + 1}`).format.fill = palette.paleYellow;
-  [54, 190, 120, 150, 280, 78, 90, 320].forEach((width, index) => {
-    sheet.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width;
-  });
-  sheet.freezePanes.freezeRows(1);
-  sheet.freezePanes.freezeColumns(1);
-  sheet.showGridLines = false;
-  return sheet;
+function masterRows() {
+  return items.map((row) => ["Y", row.practice, row.department, row.menu, row.item, "N", "승인수", `${row.menu} | ${row.item}`]);
 }
 
 function buildSiteWorkbook() {
   const workbook = Workbook.create();
-  addGuideSheet(workbook, "① 유폴리오 사이트 인증", [
-    "이 파일은 관리자만 소유·열람합니다. 학생에게 공유하지 마세요.",
-    "Google Sheets로 가져온 뒤 Code.gs와 SystemSetup.gs를 Apps Script에 붙여넣습니다.",
-    "createLinkedWorkbooks()를 한 번 실행하면 수기입력·관리자 파일이 새로 생성됩니다.",
-    "Apps Script를 웹 앱으로 배포한 URL을 웹사이트 config.js에 입력합니다.",
-    "마스터항목의 수기대상과 비교기준을 검토한 뒤 refreshAdminData()를 실행합니다.",
-  ]);
+  addGuide(
+    workbook,
+    "① 유폴리오 사이트 인증",
+    "학생 제출을 받는 관리자 전용 원본입니다. 이 파일의 RAW만 웹 앱 수신기가 기록합니다.",
+    [
+      "이 파일을 Google Sheets로 가져오고 학생명단 90명을 확인합니다.",
+      "Apps Script에 Code.gs, CaseSheetCore.gs, CaseSheetDefaults.gs, CaseSheetSync.gs, SystemSetup.gs를 각각 붙여넣습니다.",
+      "createIntegrationAdminWorkbook()을 한 번 실행해 ② 통합 관리자 파일을 만듭니다.",
+      "② 파일에서 11개 현황시트 URL을 입력하고 연결 검사 → 매핑 검토 → 전체 동기화를 실행합니다.",
+      "Apps Script를 웹 앱으로 배포하고 /exec URL을 웹사이트 config.js에 입력합니다.",
+      "정상 동기화 확인 후 매일 새벽 3시 동기화를 켭니다.",
+    ],
+  );
 
-  const settings = workbook.worksheets.add("설정");
-  settings.getRange("A1:C1").values = [["설정키", "값", "설명"]];
-  styleHeader(settings.getRange("A1:C1"));
-  settings.getRange("A2:C6").values = [
-    ["SITE_SPREADSHEET_ID", "", "현재 사이트 인증 파일 ID (스크립트가 자동 입력)"],
-    ["MANUAL_SPREADSHEET_ID", "", "생성된 수기입력 파일 ID"],
-    ["ADMIN_SPREADSHEET_ID", "", "생성된 관리자 파일 ID"],
-    ["MANUAL_SPREADSHEET_URL", "", "학생에게 공유할 파일 URL"],
+  const workbookSettings = workbook.worksheets.add("설정");
+  workbookSettings.getRange("A1:C1").values = [["설정키", "값", "설명"]];
+  styleHeader(workbookSettings.getRange("A1:C1"));
+  workbookSettings.getRange("A2:C5").values = [
+    ["SITE_SPREADSHEET_ID", "", "현재 사이트 인증 파일 ID"],
+    ["ADMIN_SPREADSHEET_ID", "", "통합 관리자 파일 ID"],
     ["ADMIN_SPREADSHEET_URL", "", "관리자 전용 파일 URL"],
+    ["LAST_REFRESHED_AT", "", "마지막 통합 동기화 시각"],
   ];
-  styleTableBody(settings.getRange("A2:C6"));
-  settings.getRange("B2:B6").format.fill = palette.paleYellow;
-  settings.getRange("A:A").format.columnWidthPx = 220;
-  settings.getRange("B:B").format.columnWidthPx = 410;
-  settings.getRange("C:C").format.columnWidthPx = 350;
-  settings.freezePanes.freezeRows(1);
-  settings.showGridLines = false;
+  styleBody(workbookSettings.getRange("A2:C5"));
+  workbookSettings.getRange("B2:B5").format.fill = palette.paleYellow;
+  [220, 430, 360].forEach((width, index) => {
+    workbookSettings.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width;
+  });
+  workbookSettings.freezePanes.freezeRows(1);
+  workbookSettings.showGridLines = false;
 
-  addRosterSheet(workbook, true);
-  addMasterSheet(workbook);
+  const rosterSheet = addTableSheet(workbook, "학생명단", ["출석번호", "학번", "이름", "이메일(선택)"], roster.map((row) => [...row, ""]), [84, 120, 100, 230]);
+  rosterSheet.getRange(`B2:B${roster.length + 1}`).format.numberFormat = "@";
+  rosterSheet.getRange(`D2:D${roster.length + 1}`).format.fill = palette.paleYellow;
 
-  const raw = workbook.worksheets.add("RAW");
-  const rawHeaders = ["수신시각", "전송 ID", "출석번호", "학번", "이름", "실습차수", "과", "메뉴/구분", "항목", "승인 수", "환자 수", "점수", "점수 원문"];
-  raw.getRange("A1:M1").values = [rawHeaders];
-  styleHeader(raw.getRange("A1:M1"));
-  raw.getRange("A:A").format.columnWidthPx = 160;
-  raw.getRange("B:B").format.columnWidthPx = 230;
+  const masterSheet = addTableSheet(workbook, "마스터항목", masterHeaders, masterRows(), [58, 190, 125, 155, 330, 82, 88, 340]);
+  masterSheet.getRange("A2:A207").dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
+  masterSheet.getRange("F2:F207").dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
+  masterSheet.getRange("G2:G207").dataValidation = { rule: { type: "list", values: ["승인수", "환자수", "점수"] } };
+  masterSheet.getRange("F2:H207").format.fill = palette.paleYellow;
+  masterSheet.freezePanes.freezeColumns(1);
+
+  const raw = addTableSheet(workbook, "RAW", rawHeaders, [], [160, 230, 84, 120, 100, 190, 120, 170, 330, 82, 82, 82, 120]);
   raw.getRange("D:D").format.numberFormat = "@";
-  raw.getRange("F:I").format.columnWidthPx = 180;
-  raw.freezePanes.freezeRows(1);
-  raw.showGridLines = false;
-
-  const log = workbook.worksheets.add("전송기록");
-  log.getRange("A1:H1").values = [["수신시각", "전송 ID", "출석번호", "학번", "이름", "항목 수", "상태", "상세 사유"]];
-  styleHeader(log.getRange("A1:H1"));
-  log.getRange("A:A").format.columnWidthPx = 160;
-  log.getRange("B:B").format.columnWidthPx = 230;
-  log.getRange("H:H").format.columnWidthPx = 380;
-  log.freezePanes.freezeRows(1);
-  log.showGridLines = false;
+  addTableSheet(workbook, "전송기록", logHeaders, [], [160, 230, 84, 120, 100, 82, 82, 420]);
   return workbook;
 }
 
-function buildManualWorkbook() {
-  const workbook = Workbook.create();
-  addGuideSheet(workbook, "② 유폴리오 수기입력", [
-    "학생에게 편집 권한으로 공유할 파일입니다. 사이트 점수는 이 파일에 들어오지 않습니다.",
-    "각 과 시트에서 본인 출석번호 행의 노란 셀만 입력합니다.",
-    "현재는 실제 206개 항목을 모두 준비했습니다. 사이트 인증 파일의 마스터항목에서 수기대상=Y인 항목만 사용하세요.",
-    "학생 이메일을 입력한 뒤 Apps Script의 applyStudentRowProtections()를 실행하면 본인 행만 편집하도록 보호할 수 있습니다.",
-    "통계 시트의 항목 번호를 바꾸면 해당 항목의 분포 차트가 갱신됩니다.",
-  ]);
-  addRosterSheet(workbook, true);
-
-  const firstDataRow = 3;
-  const lastRosterRow = firstDataRow + roster.length - 1;
-  const lastDataRow = firstDataRow + 200 - 1;
-  for (const department of departments) {
-    const departmentItems = itemsByDepartment.get(department);
-    const sheet = workbook.worksheets.add(department);
-    const lastCol = colLetter(2 + departmentItems.length);
-    const menuHeaders = ["출석번호", "이름", ...departmentItems.map((row) => row.menu)];
-    const itemHeaders = ["", "", ...departmentItems.map((row) => row.item)];
-    sheet.getRange(`A1:${lastCol}2`).values = [menuHeaders, itemHeaders];
-    styleHeader(sheet.getRange(`A1:${lastCol}2`));
-    sheet.getRange(`A${firstDataRow}:B${lastRosterRow}`).values = roster.map(([attendanceNo, , name]) => [attendanceNo, name]);
-    styleTableBody(sheet.getRange(`A${firstDataRow}:${lastCol}${lastDataRow}`));
-    if (departmentItems.length > 0) {
-      sheet.getRange(`C${firstDataRow}:${lastCol}${lastDataRow}`).format.fill = palette.paleYellow;
-      sheet.getRange(`C${firstDataRow}:${lastCol}${lastDataRow}`).format.numberFormat = "0.##";
-    }
-    sheet.getRange("A:A").format.columnWidthPx = 78;
-    sheet.getRange("B:B").format.columnWidthPx = 94;
-    for (let col = 3; col <= 2 + departmentItems.length; col += 1) {
-      sheet.getRange(`${colLetter(col)}:${colLetter(col)}`).format.columnWidthPx = 150;
-    }
-    sheet.getRange(`C1:${lastCol}2`).format.wrapText = true;
-    sheet.getRange("1:2").format.rowHeightPx = 48;
-    sheet.freezePanes.freezeRows(2);
-    sheet.freezePanes.freezeColumns(2);
-    sheet.showGridLines = false;
-  }
-
-  const stats = workbook.worksheets.add("통계");
-  styleTitle(stats, "수기입력 통계", "B4의 항목 번호를 바꾸면 오른쪽 분포 차트가 해당 항목으로 바뀝니다.", "K");
-  stats.getRange("A4:B4").values = [["선택 항목 번호", 1]];
-  stats.getRange("A4").format = { fill: palette.blue, font: { bold: true, color: palette.white } };
-  stats.getRange("B4").format = { fill: palette.paleYellow, font: { bold: true, color: palette.ink } };
-  stats.getRange("B4").dataValidation = { rule: { type: "whole", operator: "between", formula1: 1, formula2: items.length } };
-
-  const statsHeaderRow = 8;
-  const statsStartRow = statsHeaderRow + 1;
-  const statsEndRow = statsStartRow + items.length - 1;
-  stats.getRange(`A${statsHeaderRow}:K${statsHeaderRow}`).values = [["번호", "과", "메뉴/구분", "항목", "평균", "입력수", "미입력수", "0~<1", "1~<3", "3~<5", "5 이상"]];
-  styleHeader(stats.getRange(`A${statsHeaderRow}:K${statsHeaderRow}`));
-  const statValues = items.map((row, index) => [index + 1, row.department, row.menu, row.item]);
-  stats.getRange(`A${statsStartRow}:D${statsEndRow}`).values = statValues;
-  for (let index = 0; index < items.length; index += 1) {
-    const row = statsStartRow + index;
-    const item = items[index];
-    const departmentItems = itemsByDepartment.get(item.department);
-    const departmentIndex = departmentItems.findIndex((candidate) => candidate.menu === item.menu && candidate.item === item.item);
-    const sourceCol = colLetter(3 + departmentIndex);
-    const sourceRange = `${qSheet(item.department)}!$${sourceCol}$${firstDataRow}:$${sourceCol}$${lastDataRow}`;
-    stats.getRange(`E${row}:K${row}`).formulas = [[
-      `=IFERROR(AVERAGE(${sourceRange}),"")`,
-      `=COUNT(${sourceRange})`,
-      `=COUNTA('학생명단'!$A$2:$A$201)-F${row}`,
-      `=COUNTIFS(${sourceRange},">=0",${sourceRange},"<1")`,
-      `=COUNTIFS(${sourceRange},">=1",${sourceRange},"<3")`,
-      `=COUNTIFS(${sourceRange},">=3",${sourceRange},"<5")`,
-      `=COUNTIF(${sourceRange},">=5")`,
-    ]];
-  }
-  styleTableBody(stats.getRange(`A${statsStartRow}:K${statsEndRow}`));
-  stats.getRange(`E${statsStartRow}:E${statsEndRow}`).format.numberFormat = "0.00";
-  [62, 105, 145, 300, 80, 72, 80, 72, 72, 72, 72].forEach((width, index) => {
-    stats.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width;
-  });
-  stats.getRange("M1:N5").values = [["구간", "인원"], ["0~<1", ""], ["1~<3", ""], ["3~<5", ""], ["5 이상", ""]];
-  stats.getRange("N2:N5").formulas = [
-    [`=IFERROR(INDEX($H$${statsStartRow}:$H$${statsEndRow},$B$4),0)`],
-    [`=IFERROR(INDEX($I$${statsStartRow}:$I$${statsEndRow},$B$4),0)`],
-    [`=IFERROR(INDEX($J$${statsStartRow}:$J$${statsEndRow},$B$4),0)`],
-    [`=IFERROR(INDEX($K$${statsStartRow}:$K$${statsEndRow},$B$4),0)`],
+function addStatusRules(range) {
+  const rules = [
+    ["일치", palette.paleGreen, "#166534"],
+    ["정상", palette.paleGreen, "#166534"],
+    ["반영대기", palette.paleYellow, "#92400E"],
+    ["매핑대기", palette.paleYellow, "#92400E"],
+    ["현황누락의심", palette.paleRed, "#991B1B"],
+    ["유폴리오미인증", palette.paleRed, "#991B1B"],
+    ["원본오류", "#F4CCCC", "#991B1B"],
+    ["원본노후", palette.lavender, "#5B21B6"],
   ];
-  styleHeader(stats.getRange("M1:N1"));
-  const chart = stats.charts.add("bar", stats.getRange("M1:N5"));
-  chart.title = "선택 항목 점수 분포";
-  chart.hasLegend = false;
-  chart.xAxis = { axisType: "textAxis" };
-  chart.yAxis = { numberFormatCode: "0" };
-  chart.setPosition("P1", "W16");
-  stats.freezePanes.freezeRows(statsHeaderRow);
-  stats.showGridLines = false;
-  return workbook;
+  for (const [text, fill, color] of rules) {
+    range.conditionalFormats.add("containsText", {
+      text,
+      format: { fill, font: { color, bold: true } },
+    });
+  }
 }
 
 function buildAdminWorkbook() {
-  const workbook = Workbook.create();
-  addGuideSheet(workbook, "③ 유폴리오 관리자", [
-    "이 파일은 관리자만 소유·열람합니다.",
-    "사이트 인증 파일의 Apps Script에서 refreshAdminData()를 실행하면 사이트최신·수기DB·불일치가 갱신됩니다.",
-    "불일치는 마스터항목에서 수기대상=Y인 항목만 계산됩니다.",
-    "비교기준은 승인수·환자수·점수 중 항목별로 선택할 수 있습니다.",
-    "사이트기록없음은 아직 북마클릿 전송이 없거나 항목명이 바뀐 경우입니다.",
-  ]);
+  const admin = Workbook.create();
+  addGuide(
+    admin,
+    "② 유폴리오 통합관리자",
+    "기존 케이스장 시트는 그대로 두고, 이 파일은 집계값만 읽어 U-FOLIO 최신 제출과 비교합니다.",
+    [
+      "이 파일은 관리자만 열람합니다. 학생에게 공유하지 않습니다.",
+      "현황시트연결의 노란 URL 칸에 각 원본 Google Sheets 링크를 입력하고 관리자 계정을 뷰어로 공유합니다.",
+      "① 사이트 인증 파일의 유폴리오 통합관리 메뉴에서 현황시트 연결 검사를 실행합니다.",
+      "항목매핑에서 검토필요 항목만 확인하고 확실한 것만 승인으로 바꿉니다.",
+      "지금 전체 동기화를 실행해 비교결과·연결진단을 확인합니다.",
+      "원본오류가 있어도 다른 소스는 갱신되고, 실패 소스는 마지막 정상 집계를 원본노후로 유지합니다.",
+      "새 현황시트는 현황시트연결과 항목매핑에 행을 추가합니다. 구조가 복잡할 때만 숨김 _UFOLIO_EXPORT 탭을 사용합니다.",
+    ],
+  );
 
-  const settings = workbook.worksheets.add("설정");
-  settings.getRange("A1:C1").values = [["설정키", "값", "설명"]];
-  styleHeader(settings.getRange("A1:C1"));
-  settings.getRange("A2:C4").values = [
-    ["SITE_SPREADSHEET_ID", "", "사이트 인증 파일 ID"],
-    ["MANUAL_SPREADSHEET_ID", "", "수기입력 파일 ID"],
-    ["LAST_REFRESHED_AT", "", "마지막 동기화 시각"],
-  ];
-  styleTableBody(settings.getRange("A2:C4"));
-  settings.getRange("A:A").format.columnWidthPx = 220;
-  settings.getRange("B:B").format.columnWidthPx = 400;
-  settings.getRange("C:C").format.columnWidthPx = 320;
-  settings.showGridLines = false;
-
-  addMasterSheet(workbook);
-
-  const latest = workbook.worksheets.add("사이트최신");
-  latest.getRange("A1:M1").values = [["수신시각", "전송 ID", "출석번호", "학번", "이름", "실습차수", "과", "메뉴/구분", "항목", "승인 수", "환자 수", "점수", "점수 원문"]];
-  styleHeader(latest.getRange("A1:M1"));
-  latest.freezePanes.freezeRows(1);
-  latest.showGridLines = false;
-
-  const manualDb = workbook.worksheets.add("수기DB");
-  manualDb.getRange("A1:H1").values = [["출석번호", "학번", "이름", "과", "메뉴/구분", "항목", "수기값", "비교기준"]];
-  styleHeader(manualDb.getRange("A1:H1"));
-  manualDb.freezePanes.freezeRows(1);
-  manualDb.showGridLines = false;
-
-  const mismatch = workbook.worksheets.add("불일치");
-  mismatch.getRange("A1:J1").values = [["출석번호", "학번", "이름", "과", "메뉴/구분", "항목", "비교기준", "수기값", "사이트값", "상태"]];
-  styleHeader(mismatch.getRange("A1:J1"));
-  mismatch.freezePanes.freezeRows(1);
-  mismatch.showGridLines = false;
-
-  const dashboard = workbook.worksheets.add("대시보드");
-  styleTitle(dashboard, "관리자 점검 대시보드", "refreshAdminData() 실행 후 수기입력과 사이트 최신값의 비교 결과가 표시됩니다.", "H");
-  dashboard.getRange("A4:B7").values = [["지표", "값"], ["수기 입력 건수", ""], ["불일치", ""], ["사이트 기록 없음", ""]];
+  const dashboard = admin.worksheets.add("대시보드");
+  styleTitle(dashboard, "현황시트 × U-FOLIO 대시보드", "연결 상태와 차이 유형을 한눈에 확인합니다.", "H");
+  dashboard.getRange("A4:B4").values = [["지표", "값"]];
   styleHeader(dashboard.getRange("A4:B4"));
-  dashboard.getRange("B5:B7").formulas = [["=COUNTA('수기DB'!G2:G20000)"], ["=COUNTIF('불일치'!J2:J20000,\"불일치\")"], ["=COUNTIF('불일치'!J2:J20000,\"사이트기록없음\")"]];
-  dashboard.getRange("A5:A7").format.fill = palette.paleBlue;
-  dashboard.getRange("B5:B7").format.fill = palette.paleYellow;
-  dashboard.getRange("A:A").format.columnWidthPx = 180;
+  dashboard.getRange("A5:A12").values = [["정상 연결"], ["오류·노후 연결"], ["비교 건수"], ["일치"], ["반영대기"], ["현황누락의심"], ["유폴리오미인증"], ["매핑대기"]];
+  dashboard.getRange("A5:A12").format = { fill: palette.paleBlue, font: { bold: true, color: palette.ink } };
+  dashboard.getRange("B5:B12").format = { fill: palette.paleGreen, font: { bold: true, color: palette.ink }, numberFormat: "0" };
+  dashboard.getRange("A:A").format.columnWidthPx = 200;
   dashboard.getRange("B:B").format.columnWidthPx = 110;
   dashboard.showGridLines = false;
-  return workbook;
+
+  const connectionSheet = addTableSheet(admin, "현황시트연결", defaults.connectionHeaders, defaults.connections, [110, 58, 125, 220, 390, 160, 92, 82, 92, 92, 82, 130, 160, 110, 420]);
+  connectionSheet.getRange(`A2:L${defaults.connections.length + 1}`).format.fill = palette.paleYellow;
+  connectionSheet.getRange(`M2:O${defaults.connections.length + 1}`).format.fill = palette.paleBlue;
+  connectionSheet.getRange(`B2:B${defaults.connections.length + 1}`).dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
+  connectionSheet.getRange(`L2:L${defaults.connections.length + 1}`).dataValidation = { rule: { type: "list", values: ["CONFIG", "_UFOLIO_EXPORT"] } };
+  addStatusRules(connectionSheet.getRange("N2:N1000"));
+
+  const mappingSheet = addTableSheet(admin, "항목매핑", defaults.mappingHeaders, defaults.mappings, [130, 58, 90, 105, 220, 135, 135, 150, 520, 82, 90, 82, 390]);
+  mappingSheet.getRange(`A2:M${defaults.mappings.length + 1}`).format.fill = palette.paleYellow;
+  mappingSheet.getRange(`B2:B${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
+  mappingSheet.getRange(`C2:C${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["승인", "검토필요", "보류"] } };
+  mappingSheet.getRange(`J2:J${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["승인수", "환자수", "점수"] } };
+  mappingSheet.getRange(`K2:K${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["SUM", "MAX", "FIRST"] } };
+  mappingSheet.getRange(`E2:I${defaults.mappings.length + 1}`).format.wrapText = true;
+  mappingSheet.getRange(`M2:M${defaults.mappings.length + 1}`).format.wrapText = true;
+  mappingSheet.getRange(`2:${defaults.mappings.length + 1}`).format.autofitRows();
+  addStatusRules(mappingSheet.getRange("C2:C2000"));
+
+  addTableSheet(admin, "현황최신", snapshotHeaders, [], [160, 105, 130, 84, 120, 100, 120, 220, 82, 82, 92, 90, 82, 500, 90, 82, 100, 58]);
+  addTableSheet(admin, "유폴리오최신", rawHeaders, [], [160, 230, 84, 120, 100, 190, 120, 170, 330, 82, 82, 82, 120]);
+  const comparison = addTableSheet(admin, "비교결과", comparisonHeaders, [], [84, 120, 100, 120, 240, 82, 88, 98, 82, 120, 105, 130, 160]);
+  addStatusRules(comparison.getRange("J2:J20000"));
+  addTableSheet(admin, "미매핑항목", unmappedHeaders, [], [130, 105, 220, 90, 160, 520, 420]);
+  addTableSheet(admin, "연결진단", diagnosticHeaders, [], [160, 105, 70, 120, 560]);
+  addTableSheet(admin, "동기화로그", syncLogHeaders, [], [160, 90, 90, 100, 100, 100]);
+
+  const adminMaster = addTableSheet(admin, "마스터항목", masterHeaders, masterRows(), [58, 190, 125, 155, 330, 82, 88, 340]);
+  adminMaster.freezePanes.freezeColumns(1);
+  dashboard.getRange("B5:B12").formulas = [
+    ["=COUNTIF('현황시트연결'!N2:N1000,\"정상\")"],
+    ["=COUNTIF('현황시트연결'!N2:N1000,\"원본오류\")+COUNTIF('현황시트연결'!N2:N1000,\"원본노후\")"],
+    ["=COUNTA('비교결과'!A2:A20000)"],
+    ["=COUNTIF('비교결과'!J2:J20000,\"일치\")"],
+    ["=COUNTIF('비교결과'!J2:J20000,\"반영대기\")"],
+    ["=COUNTIF('비교결과'!J2:J20000,\"현황누락의심\")"],
+    ["=COUNTIF('비교결과'!J2:J20000,\"유폴리오미인증\")"],
+    ["=COUNTIF('비교결과'!J2:J20000,\"매핑대기\")"],
+  ];
+  return admin;
 }
 
 async function saveWorkbook(workbook, fileName) {
@@ -385,19 +307,17 @@ async function saveWorkbook(workbook, fileName) {
 await fs.mkdir(outputDir, { recursive: true });
 const workbooks = [
   [buildSiteWorkbook(), "01_유폴리오_사이트인증.xlsx"],
-  [buildManualWorkbook(), "02_유폴리오_수기입력.xlsx"],
-  [buildAdminWorkbook(), "03_유폴리오_관리자.xlsx"],
+  [buildAdminWorkbook(), "02_유폴리오_통합관리자.xlsx"],
 ];
-
 const files = [];
-for (const [workbook, fileName] of workbooks) {
-  files.push(await saveWorkbook(workbook, fileName));
-}
+for (const [workbook, fileName] of workbooks) files.push(await saveWorkbook(workbook, fileName));
 
-await fs.writeFile(
-  path.join(outputDir, "build-summary.json"),
-  JSON.stringify({ rosterCount: roster.length, itemCount: items.length, departments, files }, null, 2),
-  "utf8",
-);
-
-console.log(JSON.stringify({ rosterCount: roster.length, itemCount: items.length, departments, files }, null, 2));
+const summary = {
+  rosterCount: roster.length,
+  itemCount: items.length,
+  sourceCount: defaults.connections.length,
+  mappingCount: defaults.mappings.length,
+  files,
+};
+await fs.writeFile(path.join(outputDir, "build-summary.json"), JSON.stringify(summary, null, 2), "utf8");
+console.log(JSON.stringify(summary, null, 2));
