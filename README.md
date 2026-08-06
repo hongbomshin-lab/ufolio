@@ -17,7 +17,10 @@ config.js               Apps Script /exec URL 설정
 bookmarklet.js          u-folio 추출 및 전송 코드
 site.js                 설치 페이지 동작
 apps-script/Code.gs     Spreadsheet 수신기
+apps-script/SystemSetup.gs  ②·③ 파일 생성, 최신값·불일치 동기화, 행 보호
 apps-script/README.md   Apps Script 설치 상세
+docs/GOOGLE_SHEETS_SETUP.md 실제 Google Sheets 설치 순서
+scripts/                실제 데이터로 xlsx 생성·검증
 private/README.md       실제 명단을 공개하지 않는 입력 절차
 tests/                  Node 내장 테스트
 ```
@@ -46,24 +49,17 @@ PowerShell 실행 정책이 `npm.ps1`을 허용하는 환경에서는 `npm test`
 - 명단 파일의 Git 제외 상태
 - 설치 페이지의 설정 전·후 동작
 
-## 2. 관리자 전용 Spreadsheet 만들기
+## 2. Google Sheets 3개 만들기
 
-1. 관리자 Google 계정에서 새 Spreadsheet를 만듭니다.
-2. 학생과 파일을 공유하지 않습니다.
-3. `확장 프로그램 → Apps Script`를 엽니다.
-4. 기본 코드를 지우고 [apps-script/Code.gs](apps-script/Code.gs)를 붙여넣습니다.
-5. 저장한 뒤 함수 선택에서 `setupSheets()`를 실행합니다.
-6. Google 권한 요청을 승인합니다.
-7. `학생명단`, `RAW`, `전송기록` 시트가 생성됐는지 확인합니다.
+1. 로컬 `outputs/ufolio-score-system-20260806/01_유폴리오_사이트인증.xlsx`를 Google Drive에 업로드해 Google Sheets로 변환합니다.
+2. `확장 프로그램 → Apps Script`에서 [Code.gs](apps-script/Code.gs)와 [SystemSetup.gs](apps-script/SystemSetup.gs)를 각각 붙여넣습니다.
+3. `createLinkedWorkbooks()`를 한 번 실행합니다.
+4. 실제 명단 90명과 실제 항목 206개를 바탕으로 ② 수기입력·③ 관리자 파일이 Google Drive에 생성됩니다.
+5. 이후 단계는 [Google Sheets 실제 설치 가이드](docs/GOOGLE_SHEETS_SETUP.md)를 따릅니다.
 
-### 실제 학생명단 90명 입력
+### 실제 학생명단 90명
 
-1. 로컬에서 Git에 포함되지 않은 `private/SeedRoster.gs`를 엽니다.
-2. Apps Script 편집기에 임시 스크립트 파일을 하나 만들고 내용을 붙여넣습니다.
-3. `seedRoster()`를 한 번 실행합니다.
-4. `학생명단` 시트에 헤더를 제외한 90행이 생겼는지 확인합니다.
-5. 학번 열이 `YYYY-NNNNN` 형식으로 보이는지 확인합니다.
-6. Apps Script 프로젝트에서 임시 시딩 파일을 삭제합니다. 이미 시트에 입력된 명단은 유지됩니다.
+생성된 ① xlsx에 이미 헤더 제외 90행이 들어 있습니다. 공개 저장소에는 xlsx와 실제 명단 TSV가 모두 포함되지 않도록 `outputs/`와 `private/student-roster.tsv`를 Git에서 제외했습니다.
 
 `seedRoster()`는 기존 데이터가 있으면 덮어쓰지 않고 중단합니다. 98~100번의 학번·이름이 확정되면 `학생명단` 끝에 `출석번호 | 학번 | 이름` 순서로 직접 추가하면 됩니다. `Code.gs` 변경이나 재배포는 필요하지 않습니다.
 
@@ -103,23 +99,23 @@ npm.cmd test
 
 URL이 비어 있거나 잘못되면 설치 페이지가 북마클릿 설치를 차단하고 설정 오류를 표시합니다.
 
-## 5. 새 GitHub 저장소로 올리기
+## 5. GitHub 저장소
 
-현재 `codex/ufolio-standalone` 브랜치는 기존 달신 이력이 닿지 않는 새 루트 커밋에서 시작합니다. 새 GitHub 저장소를 만든 뒤 기존 달신 원격 저장소에 실수로 푸시하지 않도록 별도 원격 이름을 사용하세요.
+이 프로젝트는 기존 달신 저장소와 분리된 독립 저장소에서 관리합니다.
 
 ```powershell
-git remote add ufolio-origin https://github.com/사용자명/새저장소.git
-git push -u ufolio-origin codex/ufolio-standalone:main
+git clone https://github.com/hongbomshin-lab/ufolio.git
+cd ufolio
 ```
 
-푸시 전 확인:
+공개 저장소에 개인정보나 생성된 운영 파일이 들어가지 않았는지 변경을 올리기 전에 확인합니다.
 
 ```powershell
 git ls-files
 git check-ignore -v private/student-roster.tsv private/SeedRoster.gs
 ```
 
-두 비공개 파일은 `git ls-files`에 없어야 하고 `git check-ignore`에는 나타나야 합니다.
+두 비공개 파일과 `outputs/`는 `git ls-files`에 없어야 하고 `git check-ignore`에는 나타나야 합니다.
 
 ## 6. 새 Vercel 프로젝트 배포
 

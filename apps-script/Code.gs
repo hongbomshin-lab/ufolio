@@ -1,6 +1,7 @@
 var RAW_SHEET = "RAW";
 var ROSTER_SHEET = "학생명단";
 var LOG_SHEET = "전송기록";
+var MASTER_SHEET = "마스터항목";
 var MAX_ITEMS = 5000;
 
 var RAW_HEADERS = [
@@ -19,6 +20,16 @@ var RAW_HEADERS = [
   "점수 원문",
 ];
 var ROSTER_HEADERS = ["출석번호", "학번", "이름"];
+var MASTER_HEADERS = [
+  "활성",
+  "실습차수",
+  "과",
+  "메뉴/구분",
+  "항목",
+  "수기대상",
+  "비교기준",
+  "수기표시명",
+];
 var LOG_HEADERS = [
   "수신시각",
   "전송 ID",
@@ -33,6 +44,7 @@ var LOG_HEADERS = [
 function setupSheets() {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var roster = ensureSheet_(spreadsheet, ROSTER_SHEET, ROSTER_HEADERS);
+  ensureSheet_(spreadsheet, MASTER_SHEET, MASTER_HEADERS);
   var raw = ensureSheet_(spreadsheet, RAW_SHEET, RAW_HEADERS);
   ensureSheet_(spreadsheet, LOG_SHEET, LOG_HEADERS);
   roster.getRange("B:B").setNumberFormat("@");
@@ -105,9 +117,10 @@ function jsonOutput_(value) {
 function createSheetServices_() {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var roster = spreadsheet.getSheetByName(ROSTER_SHEET);
+  var master = spreadsheet.getSheetByName(MASTER_SHEET);
   var raw = spreadsheet.getSheetByName(RAW_SHEET);
   var log = spreadsheet.getSheetByName(LOG_SHEET);
-  if (!roster || !raw || !log) {
+  if (!roster || !master || !raw || !log) {
     throw new Error("필수 시트가 없습니다. setupSheets()를 먼저 실행하세요.");
   }
 
@@ -118,6 +131,10 @@ function createSheetServices_() {
     getRosterRows: function () {
       if (roster.getLastRow() < 2) return [];
       return roster.getRange(2, 1, roster.getLastRow() - 1, 3).getValues();
+    },
+    getMasterRows: function () {
+      if (master.getLastRow() < 2) return [];
+      return master.getRange(2, 1, master.getLastRow() - 1, 8).getValues();
     },
     appendRawRows: function (rows) {
       raw.getRange(raw.getLastRow() + 1, 1, rows.length, RAW_HEADERS.length).setValues(rows);
@@ -151,6 +168,24 @@ function processSubmission_(payload, services) {
   }
   if (matched.name !== normalizeName_(clean.student.name)) {
     return rejectSubmission_(clean, services, "학번과 이름이 학생명단과 일치하지 않습니다.");
+  }
+
+  var allowedItems = {};
+  services.getMasterRows().forEach(function (row) {
+    if (String(row[0]).trim().toUpperCase() !== "Y") return;
+    allowedItems[masterKey_(row[1], row[2], row[3], row[4])] = true;
+  });
+  if (Object.keys(allowedItems).length === 0) {
+    return rejectSubmission_(clean, services, "활성화된 마스터항목이 없습니다.");
+  }
+  var unknownItems = clean.items.filter(function (item) {
+    return !allowedItems[masterKey_(item.practiceName, item.departmentName, item.menuName, item.itemName)];
+  });
+  if (unknownItems.length > 0) {
+    var preview = unknownItems.slice(0, 3).map(function (item) {
+      return item.departmentName + " / " + item.menuName + " / " + item.itemName;
+    }).join(", ");
+    return rejectSubmission_(clean, services, "마스터항목에 없는 항목이 포함되어 있습니다: " + preview);
   }
 
   var receivedAt = services.now();
@@ -261,6 +296,14 @@ function validatePayload_(payload) {
 
 function normalizeName_(value) {
   return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+}
+
+function masterKey_(practiceName, departmentName, menuName, itemName) {
+  return [practiceName, departmentName, menuName, itemName]
+    .map(function (value) {
+      return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+    })
+    .join("|");
 }
 
 function requiredText_(value, label, maxLength) {

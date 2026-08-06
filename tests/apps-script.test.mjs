@@ -33,13 +33,17 @@ function validPayload(overrides = {}) {
   };
 }
 
-function fakeServices(rosterRows = [[7, "2024-54321", "테스트학생"]]) {
+function fakeServices(
+  rosterRows = [[7, "2024-54321", "테스트학생"]],
+  masterRows = [["Y", "3학년 치의학 임상실습 2", "보존과", "증례별 임상참여", "Observation case", "N", "승인수", ""]],
+) {
   const state = { rawRows: [], logRows: [] };
   return {
     state,
     services: {
       now: () => "2026-08-06T01:02:03.000Z",
       getRosterRows: () => rosterRows,
+      getMasterRows: () => masterRows,
       appendRawRows: (rows) => state.rawRows.push(...rows),
       appendLogRow: (row) => state.logRows.push(row),
     },
@@ -69,6 +73,19 @@ test("processSubmission_ maps a roster match and preserves every metric", () => 
   assert.equal(state.logRows[0][6], "성공");
 });
 
+test("processSubmission_ rejects items outside the active master list", () => {
+  const receiver = loadReceiver();
+  const { services, state } = fakeServices();
+  const payload = validPayload();
+  payload.items[0].itemName = "등록되지 않은 항목";
+
+  const result = receiver.processSubmission_(payload, services);
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /마스터항목에 없는 항목/);
+  assert.equal(state.rawRows.length, 0);
+});
+
 test("processSubmission_ rejects unknown IDs and mismatched names", () => {
   const receiver = loadReceiver();
 
@@ -86,7 +103,10 @@ test("processSubmission_ rejects unknown IDs and mismatched names", () => {
 
 test("processSubmission_ preserves unset score separately from zero", () => {
   const receiver = loadReceiver();
-  const { services, state } = fakeServices();
+  const { services, state } = fakeServices(
+    undefined,
+    [["Y", "실습 2", "병리과", "증례", "검사", "N", "승인수", ""]],
+  );
   const payload = validPayload({
     items: [
       {
@@ -112,9 +132,12 @@ test("processSubmission_ preserves unset score separately from zero", () => {
 
 test("processSubmission_ stores formula-like text as literal text", () => {
   const receiver = loadReceiver();
-  const { services, state } = fakeServices();
   const payload = validPayload();
   payload.items[0].itemName = '=IMPORTXML("https://example.com","//x")';
+  const { services, state } = fakeServices(
+    undefined,
+    [["Y", payload.items[0].practiceName, payload.items[0].departmentName, payload.items[0].menuName, payload.items[0].itemName, "N", "승인수", ""]],
+  );
 
   receiver.processSubmission_(payload, services);
 
