@@ -56,7 +56,14 @@ function ensureSheet_(spreadsheet, name, headers) {
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   }
-  sheet.setFrozenRows(1);
+  try {
+    sheet.setFrozenRows(1);
+  } catch (error) {
+    throw new Error(
+      "시트를 초기화할 편집 권한이 없습니다. 업로드한 .xlsx 파일이라면 파일 → Google 스프레드시트로 저장을 먼저 실행하고, 새로 만들어진 Google Sheets 파일에서 다시 실행하세요. 이미 변환했다면 현재 계정의 편집 권한을 확인하세요.\n원인: " +
+        error.message,
+    );
+  }
   return sheet;
 }
 

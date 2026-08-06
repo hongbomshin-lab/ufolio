@@ -10,6 +10,38 @@ function loadSystemSetup() {
   return context;
 }
 
+function loadReceiverSetup() {
+  const context = vm.createContext({ console });
+  const source = readFileSync("apps-script/Code.gs", "utf8");
+  vm.runInContext(source, context, { filename: "apps-script/Code.gs" });
+  return context;
+}
+
+test("sheet setup explains Office-mode permission failures", () => {
+  const setup = loadReceiverSetup();
+  const sheet = {
+    getLastRow() {
+      return 1;
+    },
+    setFrozenRows() {
+      throw new Error("You do not have permission to call setFrozenRows");
+    },
+  };
+  const spreadsheet = {
+    getSheetByName() {
+      return sheet;
+    },
+    insertSheet() {
+      throw new Error("unexpected insert");
+    },
+  };
+
+  assert.throws(
+    () => setup.ensureSheet_(spreadsheet, "학생명단", ["출석번호", "학번", "이름"]),
+    (error) => /Google 스프레드시트로 저장/.test(error.message) && /편집 권한/.test(error.message),
+  );
+});
+
 test("system setup builds stable comparison keys", () => {
   const setup = loadSystemSetup();
   assert.equal(

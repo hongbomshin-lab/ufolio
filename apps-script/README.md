@@ -12,7 +12,7 @@ Apps Script는 ① 사이트 인증 Google Sheets에 바인딩합니다. ② 통
 4. `CaseSheetSync.gs`
 5. `SystemSetup.gs`
 
-저장 후 함수 목록에서 `createIntegrationAdminWorkbook`을 한 번 실행하고 Google 권한을 승인합니다. ① `설정`에 `ADMIN_SPREADSHEET_ID`와 URL이 생기며, Google Drive에 `② 유폴리오 통합관리자`가 생성됩니다.
+① 파일을 반드시 `파일 → Google 스프레드시트로 저장`으로 변환한 다음, 함수 목록에서 `createIntegrationAdminWorkbook`을 한 번 실행하고 Google 권한을 승인합니다. ① `설정`에 `ADMIN_SPREADSHEET_ID`와 URL이 생기며, Google Drive에 `② 유폴리오 통합관리자`가 생성됩니다. `.xlsx` 편집 모드에서는 `setFrozenRows` 권한 오류가 발생할 수 있습니다.
 
 ## 메뉴 순서
 
