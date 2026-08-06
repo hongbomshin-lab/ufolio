@@ -72,7 +72,8 @@ assert.equal(core.case_evaluateExpression_("COUNT_NONEMPTY(E:H)", [1, "학생", 
 assert.equal(core.case_compareValues_(5, 3), "반영대기");
 assert.equal(core.case_compareValues_(3, 5), "현황누락의심");
 assert.equal(core.case_compareValues_(0, 0), "일치");
-assert.equal(core.case_compareValues_("", 0), "유폴리오미인증");
+assert.equal(core.case_compareValues_("", 0), "현황누락의심");
+assert.equal(core.case_compareValues_(0, ""), "유폴리오미인증");
 ```
 
 - [ ] **Step 3: Run the focused test and confirm failure**

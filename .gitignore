@@ -13,3 +13,5 @@ private/student-roster.tsv
 private/*.gs
 coverage/
 outputs/
+현황시트 모음/
+private/case-sheet-*.json
