@@ -4,7 +4,7 @@
 
 ## 기본 사용 순서
 
-실제 명단과 마스터항목이 포함된 로컬 `outputs/.../01_유폴리오_사이트인증.xlsx`를 Google Sheets로 변환하고, `apps-script/Code.gs`와 `apps-script/SystemSetup.gs`를 붙여넣은 뒤 `createLinkedWorkbooks()`를 실행합니다. 전체 순서는 `docs/GOOGLE_SHEETS_SETUP.md`를 따르세요.
+실제 명단과 마스터항목이 포함된 로컬 `outputs/.../01_유폴리오_사이트인증.xlsx`를 Google Sheets로 변환하고, Apps Script 5개 파일을 붙여넣은 뒤 `createIntegrationAdminWorkbook()`을 실행합니다. 전체 순서는 `docs/GOOGLE_SHEETS_SETUP.md`를 따르세요.
 
 ## SeedRoster 대체 절차
 
@@ -15,6 +15,6 @@
 3. `seedRoster()`를 한 번 실행합니다.
 4. Spreadsheet의 `학생명단` 시트에서 행 수와 `출석번호 | 학번 | 이름`을 확인합니다.
 5. Apps Script 프로젝트에서 임시 `SeedRoster.gs` 파일을 삭제합니다. 시트에 입력된 명단은 유지됩니다.
-6. 나중에 98~100번의 정보가 확정되면 `학생명단` 시트 끝에 직접 추가합니다. 코드 변경이나 재배포는 필요하지 않습니다.
+6. 현재 명단은 헤더를 제외하고 93명인지 확인합니다.
 
 `seedRoster()`는 기존 명단이 있을 때 덮어쓰지 않고 중단합니다. 다시 넣어야 한다면 관리자가 시트의 데이터 행을 직접 확인하고 비운 뒤 실행하세요.
