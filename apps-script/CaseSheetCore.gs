@@ -75,6 +75,12 @@ function case_evaluateExpression_(expression, rowValues) {
     var oneValue = case_valueAt_(values, argumentText);
     return case_isBlank_(oneValue) ? "" : 1;
   }
+  if (operation === "HAS_STATUS_O") {
+    var rawStatusValue = case_valueAt_(values, argumentText);
+    var statusValue = String(rawStatusValue == null ? "" : rawStatusValue).trim();
+    if (!statusValue) return "";
+    return /(^|[^A-Z0-9가-힣])O([^A-Z0-9가-힣]|$)/i.test(statusValue) ? 1 : "";
+  }
   if (operation === "SUM") {
     var sumArguments = argumentText.split(",").map(function (value) { return value.trim(); });
     if (sumArguments.length < 1 || sumArguments.some(function (value) { return !value; })) {
@@ -148,8 +154,9 @@ function case_recordMetric_(record, measurement) {
 function case_aggregateUfolio_(mapping, latestByKey, studentId) {
   var targetText = String(mapping && mapping.ufolioTargets || "").trim();
   var targetLines = targetText ? targetText.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean) : [];
-  if (targetLines.length === 0) return { found: false, value: "" };
+  if (targetLines.length === 0) return { found: false, targetFound: false, value: "" };
   var numbers = [];
+  var targetFound = false;
   targetLines.forEach(function (line) {
     var target = line.split("|").map(function (part) { return part.trim(); });
     if (target.length !== 4 || target.some(function (part) { return !part; })) {
@@ -157,14 +164,15 @@ function case_aggregateUfolio_(mapping, latestByKey, studentId) {
     }
     var record = latestByKey[case_ufolioKey_(studentId, target)];
     if (!record) return;
+    targetFound = true;
     var value = case_recordMetric_(record, mapping.measurement);
     if (case_isBlank_(value)) return;
     numbers.push(case_numericValue_(value));
   });
-  if (numbers.length === 0) return { found: false, value: "" };
+  if (numbers.length === 0) return { found: false, targetFound: targetFound, value: "" };
   var aggregation = String(mapping && mapping.aggregation || "SUM").trim().toUpperCase();
-  if (aggregation === "SUM") return { found: true, value: numbers.reduce(function (sum, value) { return sum + value; }, 0) };
-  if (aggregation === "MAX") return { found: true, value: Math.max.apply(null, numbers) };
-  if (aggregation === "FIRST") return { found: true, value: numbers[0] };
+  if (aggregation === "SUM") return { found: true, targetFound: true, value: numbers.reduce(function (sum, value) { return sum + value; }, 0) };
+  if (aggregation === "MAX") return { found: true, targetFound: true, value: Math.max.apply(null, numbers) };
+  if (aggregation === "FIRST") return { found: true, targetFound: true, value: numbers[0] };
   throw new Error("지원하지 않는 U-FOLIO 집계 방식입니다: " + aggregation);
 }

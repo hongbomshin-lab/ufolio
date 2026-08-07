@@ -29,6 +29,7 @@ function onOpen() {
     .createMenu("유폴리오 통합관리")
     .addItem("통합 관리자 파일 최초 생성", "createIntegrationAdminWorkbook")
     .addItem("기본 연결·매핑 누락분 추가", "seedIntegrationDefaults")
+    .addItem("검토 완료 매핑 교정 적용", "applyReviewedMappingCorrections")
     .addSeparator()
     .addItem("현황시트 연결 검사", "validateCaseConnections")
     .addItem("지금 전체 동기화", "refreshIntegratedData")
@@ -65,6 +66,32 @@ function seedIntegrationDefaults() {
   var admin = case_getAdmin_(site);
   sys_seedIntegrationDefaults_(admin);
   SpreadsheetApp.getUi().alert("기존 입력값을 유지하면서 누락된 기본 연결과 매핑만 추가했습니다.");
+}
+
+function applyReviewedMappingCorrections() {
+  var site = SpreadsheetApp.getActiveSpreadsheet();
+  var admin = case_getAdmin_(site);
+  var connectionSheet = admin.getSheetByName("현황시트연결");
+  var mappingSheet = admin.getSheetByName("항목매핑");
+  if (!connectionSheet || !mappingSheet) throw new Error("통합 관리자 파일의 설정 시트를 찾을 수 없습니다.");
+
+  var existingConnections = connectionSheet.getLastRow() < 2 ? [] : connectionSheet.getRange(2, 1, connectionSheet.getLastRow() - 1, CASE_CONNECTION_HEADERS.length).getValues();
+  var reviewedConnections = sys_mergeReviewedConnections_(existingConnections, case_defaultConnections_());
+  var implant = reviewedConnections.filter(function (row) { return String(row[0]) === "IMPLANT"; })[0];
+  if (implant) {
+    implant[1] = "N";
+    implant[13] = "검토필요";
+    implant[14] = "현재 학년·A/O 의미 확인 전 비활성";
+  }
+
+  var existingMappings = mappingSheet.getLastRow() < 2 ? [] : mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, CASE_MAPPING_HEADERS.length).getValues();
+  var reviewedMappings = sys_mergeReviewedRows_(existingMappings, case_defaultMappings_(), 0, ["PROS_ASSIST"]);
+
+  sys_replaceData_(connectionSheet, CASE_CONNECTION_HEADERS, reviewedConnections);
+  sys_replaceData_(mappingSheet, CASE_MAPPING_HEADERS, reviewedMappings);
+  sys_applyAdminFormats_(admin);
+  refreshIntegratedData();
+  SpreadsheetApp.getUi().alert("검토 완료 매핑을 반영하고 전체 동기화를 실행했습니다.\n\n미매핑항목 시트에는 아직 확인이 필요한 항목만 남습니다.");
 }
 
 function sys_buildIntegrationAdmin_(spreadsheet, master) {
@@ -122,14 +149,51 @@ function sys_mergeSeedRows_(existingRows, seedRows, keyIndex) {
   return output;
 }
 
+function sys_mergeReviewedRows_(existingRows, reviewedRows, keyIndex, retiredKeys) {
+  var reviewedByKey = {};
+  var emitted = {};
+  var retired = {};
+  (retiredKeys || []).forEach(function (key) { retired[String(key)] = true; });
+  reviewedRows.forEach(function (row) { reviewedByKey[String(row[keyIndex])] = row; });
+  var output = [];
+  existingRows.forEach(function (row) {
+    var key = String(row[keyIndex]);
+    if (!key || retired[key]) return;
+    if (reviewedByKey[key]) {
+      output.push(reviewedByKey[key].slice());
+      emitted[key] = true;
+    } else {
+      output.push(row.slice());
+    }
+  });
+  reviewedRows.forEach(function (row) {
+    var key = String(row[keyIndex]);
+    if (!emitted[key]) output.push(row.slice());
+  });
+  return output;
+}
+
+function sys_mergeReviewedConnections_(existingRows, reviewedRows) {
+  var existingByKey = {};
+  existingRows.forEach(function (row) { if (row[0] !== "") existingByKey[String(row[0])] = row; });
+  var merged = sys_mergeReviewedRows_(existingRows, reviewedRows, 0);
+  return merged.map(function (row) {
+    var existing = existingByKey[String(row[0])];
+    if (!existing) return row;
+    var output = row.slice();
+    [1, 4, 12, 13, 14].forEach(function (index) { output[index] = existing[index]; });
+    return output;
+  });
+}
+
 function sys_buildDashboard_(sheet) {
   sys_resetSheet_(sheet);
   sys_writeTitle_(sheet, "현황시트 × U-FOLIO 통합 대시보드", "비교결과와 연결 상태를 한눈에 확인합니다.", 8);
   sheet.getRange("A4:B4").setValues([["지표", "값"]]);
-  sheet.getRange("A5:A12").setValues([
-    ["정상 연결"], ["오류·노후 연결"], ["비교 건수"], ["일치"], ["반영대기"], ["현황누락의심"], ["유폴리오미인증"], ["매핑대기"],
+  sheet.getRange("A5:A13").setValues([
+    ["정상 연결"], ["오류·노후 연결"], ["비교 건수"], ["일치"], ["반영대기"], ["현황누락의심"], ["유폴리오미인증"], ["U-FOLIO측정값없음"], ["매핑대기"],
   ]);
-  sheet.getRange("B5:B12").setFormulas([
+  sheet.getRange("B5:B13").setFormulas([
     ["=COUNTIF('현황시트연결'!N2:N1000,\"정상\")"],
     ["=COUNTIF('현황시트연결'!N2:N1000,\"원본오류\")+COUNTIF('현황시트연결'!N2:N1000,\"원본노후\")"],
     ["=COUNTA('비교결과'!A2:A20000)"],
@@ -137,11 +201,12 @@ function sys_buildDashboard_(sheet) {
     ["=COUNTIF('비교결과'!J2:J20000,\"반영대기\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"현황누락의심\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"유폴리오미인증\")"],
+    ["=COUNTIF('비교결과'!J2:J20000,\"U-FOLIO측정값없음\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"매핑대기\")"],
   ]);
   sys_styleHeader_(sheet.getRange("A4:B4"));
-  sheet.getRange("A5:A12").setBackground(SYS_COLORS.paleBlue).setFontWeight("bold");
-  sheet.getRange("B5:B12").setBackground(SYS_COLORS.paleGreen).setNumberFormat("0");
+  sheet.getRange("A5:A13").setBackground(SYS_COLORS.paleBlue).setFontWeight("bold");
+  sheet.getRange("B5:B13").setBackground(SYS_COLORS.paleGreen).setNumberFormat("0");
   sheet.setColumnWidth(1, 190);
   sheet.setColumnWidth(2, 110);
   sheet.setHiddenGridlines(true);
@@ -191,6 +256,7 @@ function sys_applyAdminFormats_(spreadsheet) {
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("반영대기").setBackground(SYS_COLORS.paleYellow).setRanges([statusRange]).build(),
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("현황누락의심").setBackground(SYS_COLORS.paleRed).setRanges([statusRange]).build(),
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("유폴리오미인증").setBackground(SYS_COLORS.paleRed).setRanges([statusRange]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("U-FOLIO측정값없음").setBackground(SYS_COLORS.paleYellow).setRanges([statusRange]).build(),
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("원본오류").setBackground("#F4CCCC").setRanges([statusRange]).build(),
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo("원본노후").setBackground("#D9D2E9").setRanges([statusRange]).build(),
     ]);

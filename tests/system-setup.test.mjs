@@ -80,6 +80,7 @@ test("system setup exposes only the integration-admin workflow", () => {
   }
   for (const required of [
     "createIntegrationAdminWorkbook",
+    "applyReviewedMappingCorrections",
     "validateCaseConnections",
     "refreshIntegratedData",
     "installDailyRefreshTrigger",

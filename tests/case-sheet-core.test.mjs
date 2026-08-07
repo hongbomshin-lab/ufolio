@@ -71,6 +71,28 @@ test("U-FOLIO aggregation selects a metric and combines mapped targets", () => {
   assert.equal(missing.value, "");
 });
 
+test("U-FOLIO aggregation distinguishes a missing target from a blank selected metric", () => {
+  const core = loadCore();
+  const target = "3학년 치의학 임상실습 2|구강내과|증례별 임상참여|Charting";
+  const latest = {
+    [`2024-00001|${target}`]: { approvedCount: "", patientCount: "", score: 16 },
+  };
+  const blankMetric = core.case_aggregateUfolio_({
+    ufolioTargets: target,
+    measurement: "환자수",
+    aggregation: "SUM",
+  }, latest, "2024-00001");
+  assert.equal(blankMetric.found, false);
+  assert.equal(blankMetric.targetFound, true);
+
+  const missingTarget = core.case_aggregateUfolio_({
+    ufolioTargets: target,
+    measurement: "환자수",
+    aggregation: "SUM",
+  }, {}, "2024-00001");
+  assert.equal(missingTarget.targetFound, false);
+});
+
 test("name normalization removes spacing variants", () => {
   const core = loadCore();
   assert.equal(core.case_normalizeName_("  홍  길동 "), "홍길동");

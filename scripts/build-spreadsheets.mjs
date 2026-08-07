@@ -209,6 +209,7 @@ function addStatusRules(range) {
     ["정상", palette.paleGreen, "#166534"],
     ["반영대기", palette.paleYellow, "#92400E"],
     ["매핑대기", palette.paleYellow, "#92400E"],
+    ["U-FOLIO측정값없음", palette.paleYellow, "#92400E"],
     ["현황누락의심", palette.paleRed, "#991B1B"],
     ["유폴리오미인증", palette.paleRed, "#991B1B"],
     ["원본오류", "#F4CCCC", "#991B1B"],
@@ -243,9 +244,9 @@ function buildAdminWorkbook() {
   styleTitle(dashboard, "현황시트 × U-FOLIO 대시보드", "연결 상태와 차이 유형을 한눈에 확인합니다.", "H");
   dashboard.getRange("A4:B4").values = [["지표", "값"]];
   styleHeader(dashboard.getRange("A4:B4"));
-  dashboard.getRange("A5:A12").values = [["정상 연결"], ["오류·노후 연결"], ["비교 건수"], ["일치"], ["반영대기"], ["현황누락의심"], ["유폴리오미인증"], ["매핑대기"]];
-  dashboard.getRange("A5:A12").format = { fill: palette.paleBlue, font: { bold: true, color: palette.ink } };
-  dashboard.getRange("B5:B12").format = { fill: palette.paleGreen, font: { bold: true, color: palette.ink }, numberFormat: "0" };
+  dashboard.getRange("A5:A13").values = [["정상 연결"], ["오류·노후 연결"], ["비교 건수"], ["일치"], ["반영대기"], ["현황누락의심"], ["유폴리오미인증"], ["U-FOLIO측정값없음"], ["매핑대기"]];
+  dashboard.getRange("A5:A13").format = { fill: palette.paleBlue, font: { bold: true, color: palette.ink } };
+  dashboard.getRange("B5:B13").format = { fill: palette.paleGreen, font: { bold: true, color: palette.ink }, numberFormat: "0" };
   dashboard.getRange("A:A").format.columnWidthPx = 200;
   dashboard.getRange("B:B").format.columnWidthPx = 110;
   dashboard.showGridLines = false;
@@ -278,7 +279,7 @@ function buildAdminWorkbook() {
 
   const adminMaster = addTableSheet(admin, "마스터항목", masterHeaders, masterRows(), [58, 190, 125, 155, 330, 82, 88, 340]);
   adminMaster.freezePanes.freezeColumns(1);
-  dashboard.getRange("B5:B12").formulas = [
+  dashboard.getRange("B5:B13").formulas = [
     ["=COUNTIF('현황시트연결'!N2:N1000,\"정상\")"],
     ["=COUNTIF('현황시트연결'!N2:N1000,\"원본오류\")+COUNTIF('현황시트연결'!N2:N1000,\"원본노후\")"],
     ["=COUNTA('비교결과'!A2:A20000)"],
@@ -286,6 +287,7 @@ function buildAdminWorkbook() {
     ["=COUNTIF('비교결과'!J2:J20000,\"반영대기\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"현황누락의심\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"유폴리오미인증\")"],
+    ["=COUNTIF('비교결과'!J2:J20000,\"U-FOLIO측정값없음\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"매핑대기\")"],
   ];
   return admin;

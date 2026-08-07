@@ -27,7 +27,7 @@ function case_expressionColumnRefs_(expression) {
   if (!match) throw new Error("지원하지 않는 집계식입니다: " + text);
   var operation = match[1];
   var args = match[2].trim();
-  if (operation === "VALUE" || operation === "NUMBER_OR_ZERO" || operation === "NONEMPTY_AS_ONE") {
+  if (operation === "VALUE" || operation === "NUMBER_OR_ZERO" || operation === "NONEMPTY_AS_ONE" || operation === "HAS_STATUS_O") {
     case_columnIndex_(args);
     return [args.toUpperCase()];
   }
@@ -224,7 +224,10 @@ function case_refreshAll_(services) {
     }, latestByKey, row.studentId);
     var ufolioValue = aggregated.found ? aggregated.value : "";
     if (case_isBlank_(row.sourceValue) && !aggregated.found) return;
-    comparisonRows.push(case_comparisonRow_(row, ufolioValue, case_compareValues_(row.sourceValue, ufolioValue)));
+    var comparisonStatus = !aggregated.found && aggregated.targetFound
+      ? "U-FOLIO측정값없음"
+      : case_compareValues_(row.sourceValue, ufolioValue);
+    comparisonRows.push(case_comparisonRow_(row, ufolioValue, comparisonStatus));
   });
 
   snapshotRows.sort(case_snapshotSort_);

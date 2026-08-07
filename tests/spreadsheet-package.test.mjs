@@ -55,7 +55,7 @@ test("spreadsheet verifier expects the same two-workbook package", () => {
 test("cross-sheet dashboard formulas are authored after referenced sheets exist", () => {
   const connectionIndex = builder.indexOf('addTableSheet(admin, "현황시트연결"');
   const comparisonIndex = builder.indexOf('addTableSheet(admin, "비교결과"');
-  const formulaIndex = builder.indexOf('dashboard.getRange("B5:B12").formulas');
+  const formulaIndex = builder.indexOf('dashboard.getRange("B5:B13").formulas');
   assert.ok(connectionIndex >= 0 && comparisonIndex >= 0 && formulaIndex >= 0);
   assert.ok(connectionIndex < formulaIndex, "연결 시트보다 대시보드 수식을 먼저 기록함");
   assert.ok(comparisonIndex < formulaIndex, "비교 시트보다 대시보드 수식을 먼저 기록함");

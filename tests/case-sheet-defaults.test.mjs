@@ -45,7 +45,7 @@ test("master config contains exactly 206 unique non-identifying item keys", () =
   assert.equal(items.some((row) => /\b\d{6,8}\b/.test(row.item)), false);
 });
 
-test("default connections cover the 11 approved read-only sources", () => {
+test("default connections cover ten active sources and one pending implant source", () => {
   const defaults = loadDefaults();
   const rows = defaults.case_defaultConnections_();
   const objects = rows.map((row) => Object.fromEntries(defaults.CASE_CONNECTION_HEADERS.map((header, index) => [header, row[index]])));
@@ -54,11 +54,14 @@ test("default connections cover the 11 approved read-only sources", () => {
     "CONS_SCORE", "CONS_SURGERY", "EXT", "IMPLANT", "OM", "OMS", "OMS_STAGE", "PATH", "PED_CHART", "PERIO", "PROS",
   ].sort());
   assert.equal(new Set(keys).size, 11);
-  assert.equal(objects.every((row) => row["활성"] === "Y"), true);
+  assert.equal(objects.filter((row) => row["소스키"] !== "IMPLANT").every((row) => row["활성"] === "Y"), true);
+  assert.equal(objects.find((row) => row["소스키"] === "IMPLANT")["활성"], "N");
   assert.equal(objects.every((row) => row["스프레드시트 URL"] === ""), true);
   assert.equal(objects.every((row) => /^[A-Z]{1,3}$/.test(row["출석번호 열"]) && /^[A-Z]{1,3}$/.test(row["이름 열"])), true);
   assert.equal(objects.every((row) => Number.isInteger(row["데이터 시작행"]) && row["데이터 시작행"] >= 2), true);
-  assert.equal(objects.every((row) => row["데이터 종료행"] === ""), true);
+  assert.equal(objects.filter((row) => !["PROS", "OMS"].includes(row["소스키"])).every((row) => row["데이터 종료행"] === ""), true);
+  assert.equal(objects.find((row) => row["소스키"] === "PROS")["데이터 종료행"], 96);
+  assert.equal(objects.find((row) => row["소스키"] === "OMS")["데이터 종료행"], 94);
   assert.equal(objects.find((row) => row["소스키"] === "CONS_SCORE")["시트명"], "점수판");
   assert.equal(objects.find((row) => row["소스키"] === "CONS_SURGERY")["시트명"], "점수표");
   assert.equal(objects.find((row) => row["소스키"] === "PED_CHART")["시트명"], "차팅 현황");
@@ -86,7 +89,7 @@ test("approved mappings use the restricted DSL and valid master targets", () => 
   const approved = mappings.filter((row) => row["활성"] === "Y" && row["검토상태"] === "승인");
   assert.ok(approved.length >= 20);
   for (const mapping of approved) {
-    assert.match(mapping["인증대상식"], /^(?:VALUE|NUMBER_OR_ZERO|NONEMPTY_AS_ONE|SUM|COUNT_NONEMPTY|COUNT_STATUS)\(.+\)$/);
+    assert.match(mapping["인증대상식"], /^(?:VALUE|NUMBER_OR_ZERO|NONEMPTY_AS_ONE|HAS_STATUS_O|SUM|COUNT_NONEMPTY|COUNT_STATUS)\(.+\)$/);
     assert.ok(["승인수", "환자수", "점수"].includes(mapping["측정값"]));
     assert.ok(["SUM", "MAX", "FIRST"].includes(mapping["집계방식"]));
     const targets = String(mapping["U-FOLIO 대상"]).split(/\r?\n/).filter(Boolean);
