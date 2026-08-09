@@ -61,8 +61,9 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.match(mappings.OMS_CYST[8], /수술실-Cyst and benign tumor surgery/);
   assert.match(mappings.OMS_OTHER_SURGERY[8], /수술실-기타/);
   assert.equal(mappings.OMS_EXT_A[9], "승인수");
-  assert.equal(mappings.OMS_RECALL_MINOR[9], "승인수");
-  assert.equal(mappings.OMS_NEW_CHART[9], "승인수");
+  assert.equal(mappings.OMS_RECALL_MAJOR[9], "환자수");
+  assert.equal(mappings.OMS_RECALL_MINOR[9], "환자수");
+  assert.equal(mappings.OMS_NEW_CHART[9], "환자수");
   assert.match(mappings.OMS_IMPLANT_A[8], /2개 이하 식립\)_\[A\]/);
   assert.match(mappings.OMS_IMPLANT_A[8], /3개 이상 식립\)_\[A\]/);
   assert.equal(mappings.OMS_WARD[9], "점수");
