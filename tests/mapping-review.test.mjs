@@ -20,7 +20,7 @@ test("pathology counts only a standalone O status token", () => {
     assert.equal(core.case_evaluateExpression_("HAS_STATUS_O(D)", [1, "학생", "", value]), 1);
   }
   for (const value of ["", "X", "작성 예정", "2026-08-01", "X(biopsy 결과 미정)", "ONGOING"]) {
-    assert.equal(core.case_evaluateExpression_("HAS_STATUS_O(D)", [1, "학생", "", value]), "");
+    assert.equal(core.case_evaluateExpression_("HAS_STATUS_O(D)", [1, "학생", "", value]), 0);
   }
 });
 

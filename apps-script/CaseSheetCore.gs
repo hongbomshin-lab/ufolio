@@ -58,7 +58,15 @@ function case_valuesInRange_(rowValues, reference) {
   return values;
 }
 
+// 현황시트에서 읽어온 값이 공란이면 0으로 본다. 식이 지정된 이상 "아직 안 적음"도 0건으로 취급하기로 했다.
+// 여기서 한 번만 변환하면 집계식 7종에 모두 적용되고, 관리자가 나중에 추가하는 매핑도 자동으로 따른다.
+// 되돌리려면 이 래퍼를 없애고 case_evaluateExpressionRaw_ 를 다시 case_evaluateExpression_ 로 부르면 된다.
 function case_evaluateExpression_(expression, rowValues) {
+  var evaluated = case_evaluateExpressionRaw_(expression, rowValues);
+  return evaluated === "" ? 0 : evaluated;
+}
+
+function case_evaluateExpressionRaw_(expression, rowValues) {
   var text = String(expression == null ? "" : expression).trim();
   var match = /^([A-Z_]+)\((.*)\)$/.exec(text);
   if (!match) throw new Error("지원하지 않는 집계식입니다: " + text);

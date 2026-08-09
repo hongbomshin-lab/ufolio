@@ -10,16 +10,25 @@ function loadCore() {
   return context;
 }
 
-test("restricted expressions preserve blanks and evaluate supported operations", () => {
+test("restricted expressions read blanks as zero and evaluate supported operations", () => {
   const core = loadCore();
   assert.equal(core.case_evaluateExpression_("VALUE(C)", [1, "학생", 3.5]), 3.5);
-  assert.equal(core.case_evaluateExpression_("VALUE(C)", [1, "학생", ""]), "");
+  assert.equal(core.case_evaluateExpression_("VALUE(C)", [1, "학생", ""]), 0);
   assert.equal(core.case_evaluateExpression_("NUMBER_OR_ZERO(C)", [1, "학생", ""]), 0);
   assert.equal(core.case_evaluateExpression_("NONEMPTY_AS_ONE(C)", [1, "학생", "완"]), 1);
+  assert.equal(core.case_evaluateExpression_("NONEMPTY_AS_ONE(C)", [1, "학생", ""]), 0);
   assert.equal(core.case_evaluateExpression_("SUM(C,D)", [1, "학생", 2, 3]), 5);
-  assert.equal(core.case_evaluateExpression_("SUM(C,D)", [1, "학생", "", ""]), "");
+  assert.equal(core.case_evaluateExpression_("SUM(C,D)", [1, "학생", "", ""]), 0);
   assert.equal(core.case_evaluateExpression_("COUNT_NONEMPTY(E:H)", [1, "학생", "", "", "환자", "", "환자", ""]), 2);
   assert.equal(core.case_evaluateExpression_("COUNT_STATUS(C:F,완)", [1, "학생", "완", "예", "완", ""]), 2);
+});
+
+test("raw expression layer still distinguishes a blank source cell from a real zero", () => {
+  const core = loadCore();
+  assert.equal(core.case_evaluateExpressionRaw_("VALUE(C)", [1, "학생", ""]), "");
+  assert.equal(core.case_evaluateExpressionRaw_("VALUE(C)", [1, "학생", 0]), 0);
+  assert.equal(core.case_evaluateExpressionRaw_("SUM(C,D)", [1, "학생", "", ""]), "");
+  assert.equal(core.case_evaluateExpressionRaw_("NONEMPTY_AS_ONE(C)", [1, "학생", ""]), "");
 });
 
 test("restricted expressions reject unknown syntax and source formula errors", () => {
