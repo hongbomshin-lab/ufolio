@@ -30,14 +30,31 @@ test("reviewed source row bounds exclude prosthodontic and OMS summary rows", ()
   assert.equal(rows.PROS[9], 96);
   assert.equal(rows.OMS[9], 94);
   assert.equal(rows.IMPLANT[1], "N");
+  assert.equal(rows.IMPLANT[13], "보류");
+  assert.match(rows.IMPLANT[14], /과거 학년/);
 });
 
 test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   const mappings = mappingByKey();
 
+  assert.equal(Object.keys(mappings).length, 63);
+
+  assert.equal(mappings.CONS_RESIN_STAGE[2], "승인");
+  assert.equal(mappings.CONS_RESIN_STAGE[9], "점수");
+  assert.match(mappings.CONS_RESIN_STAGE[8], /Composite restoration\(3급\/4급\)\(practice\)/);
+  assert.match(mappings.CONS_RESIN_STAGE[8], /Composite restoration\(practice\)/);
+  assert.match(mappings.CONS_RESIN_STAGE[8], /Composite restortion\(2급\)\(Practice\)/);
+  assert.equal(mappings.CONS_ENDO_STAGE[2], "승인");
+  assert.equal(mappings.CONS_ENDO_STAGE[9], "점수");
+  assert.match(mappings.CONS_ENDO_STAGE[8], /Endodontic treatment\(practice\)/);
+  assert.equal(mappings.CONS_OBS_SURG_SCORE[1], "N");
+  assert.equal(mappings.CONS_OBS_SURG_SCORE[2], "보류");
+
   assert.equal(mappings.OM_CHARTING[5], "VALUE(C)");
   assert.equal(mappings.OM_CHARTING[9], "환자수");
-  assert.equal(mappings.OM_PT[2], "검토필요");
+  assert.equal(mappings.OM_PT[2], "승인");
+  assert.equal(mappings.OM_PT[7], "SUM(I,J)");
+  assert.equal(mappings.OM_PT[9], "점수");
   assert.equal(mappings.PED_CHARTING[9], "승인수");
 
   assert.match(mappings.OMS_MALIGNANT[8], /수술실-Malignant tumor/);
@@ -48,13 +65,23 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.equal(mappings.OMS_NEW_CHART[9], "승인수");
   assert.match(mappings.OMS_IMPLANT_A[8], /2개 이하 식립\)_\[A\]/);
   assert.match(mappings.OMS_IMPLANT_A[8], /3개 이상 식립\)_\[A\]/);
+  assert.equal(mappings.OMS_WARD[9], "점수");
+  assert.equal(mappings.OMS_BIOPSY[1], "N");
+  assert.equal(mappings.OMS_I_D[1], "N");
   assert.equal(mappings.OMS_STAGE_BIOPSY[7], "COUNT_NONEMPTY(D:E)");
   assert.equal(mappings.OMS_STAGE_I_D[7], "COUNT_NONEMPTY(H:J)");
+  assert.equal(mappings.OMS_STAGE_BIOPSY_TOTAL[7], "NONEMPTY_AS_ONE(F)");
+  assert.match(mappings.OMS_STAGE_BIOPSY_TOTAL[8], /Total Case\|Biopsy$/);
+  assert.equal(mappings.OMS_STAGE_BIOPSY_TOTAL[9], "승인수");
+  assert.equal(mappings.OMS_STAGE_I_D_TOTAL[7], "NONEMPTY_AS_ONE(K)");
+  assert.match(mappings.OMS_STAGE_I_D_TOTAL[8], /Total Case\|I & D$/);
+  assert.equal(mappings.OMS_STAGE_I_D_TOTAL[9], "승인수");
 
-  assert.match(mappings.IMPLANT_TOTAL[8], /2개 이하 식립\)_\[O\]/);
-  assert.match(mappings.IMPLANT_TOTAL[8], /3개 이상 식립\)_\[O\]/);
+  assert.match(mappings.IMPLANT_TOTAL[8], /2개 이하 식립\)_\[A\]/);
+  assert.match(mappings.IMPLANT_TOTAL[8], /3개 이상 식립\)_\[A\]/);
   assert.equal(mappings.IMPLANT_TOTAL[9], "승인수");
-  assert.equal(mappings.IMPLANT_TOTAL[2], "검토필요");
+  assert.equal(mappings.IMPLANT_TOTAL[1], "N");
+  assert.equal(mappings.IMPLANT_TOTAL[2], "보류");
 
   assert.match(mappings.PROS_REMOVABLE[8], /Total case evaluation \(가철성\)/);
   assert.match(mappings.PROS_FIXED[8], /Total case evaluation \(고정성\)/);
@@ -64,7 +91,14 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.match(mappings.PROS_STUDENT_EVAL[8], /01\. Student evaluation/);
   assert.match(mappings.PROS_FACULTY_OBS[8], /02\. observation \(교수님\)/);
   assert.match(mappings.PROS_IMPLANT_ASSIST[8], /03\. Implant assist/);
-  assert.equal(mappings.PROS_LAB[1], "N");
+  assert.equal(mappings.PROS_LAB[1], "Y");
+  assert.equal(mappings.PROS_LAB[2], "승인");
+  assert.equal(mappings.PROS_LAB[7], "VALUE(X)");
+  assert.equal(mappings.PROS_LAB[9], "승인수");
+  assert.equal(String(mappings.PROS_LAB[8]).split("\n").length, 3);
+  assert.equal(mappings.PROS_LAB_SCORE[7], "VALUE(Y)");
+  assert.equal(mappings.PROS_LAB_SCORE[9], "점수");
+  assert.equal(mappings.PROS_LAB_SCORE[8], mappings.PROS_LAB[8]);
 });
 
 test("review migration replaces managed keys and preserves custom rows", () => {

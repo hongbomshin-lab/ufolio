@@ -80,8 +80,8 @@ function applyReviewedMappingCorrections() {
   var implant = reviewedConnections.filter(function (row) { return String(row[0]) === "IMPLANT"; })[0];
   if (implant) {
     implant[1] = "N";
-    implant[13] = "검토필요";
-    implant[14] = "현재 학년·A/O 의미 확인 전 비활성";
+    implant[13] = "보류";
+    implant[14] = "과거 학년·예시 자료이므로 비활성";
   }
 
   var existingMappings = mappingSheet.getLastRow() < 2 ? [] : mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, CASE_MAPPING_HEADERS.length).getValues();

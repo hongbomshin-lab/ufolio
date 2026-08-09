@@ -85,7 +85,8 @@ test("approved mappings use the restricted DSL and valid master targets", () => 
   assert.ok(mappings.length >= 35);
   assert.equal(new Set(mappings.map((row) => row["매핑키"])).size, mappings.length);
   assert.equal(mappings.every((row) => connections.has(row["소스키"])), true);
-  assert.ok(mappings.some((row) => row["검토상태"] === "검토필요"));
+  assert.equal(mappings.every((row) => ["승인", "검토필요", "보류"].includes(row["검토상태"])), true);
+  assert.ok(mappings.some((row) => row["검토상태"] === "보류"));
   const approved = mappings.filter((row) => row["활성"] === "Y" && row["검토상태"] === "승인");
   assert.ok(approved.length >= 20);
   for (const mapping of approved) {

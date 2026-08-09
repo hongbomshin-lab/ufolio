@@ -22,9 +22,9 @@ U-FOLIO 북마클릿 ──전송──> ① 유폴리오 사이트 인증
 운영 파일은 정확히 두 개입니다.
 
 1. `01_유폴리오_사이트인증.xlsx`: 학생명단, 206개 마스터, 북마클릿 수신 RAW·로그
-2. `02_유폴리오_통합관리자.xlsx`: 11개 원본 연결, 53개 초기 매핑, 최신 집계·비교·진단
+2. `02_유폴리오_통합관리자.xlsx`: 11개 원본 연결, 63개 초기 매핑, 최신 집계·비교·진단
 
-로컬 결과물은 `outputs/ufolio-case-integration-20260806/`에 생성되며 Git에서 제외됩니다.
+최신 로컬 결과물은 `outputs/ufolio-case-integration-20260809/`에 생성되며 Git에서 제외됩니다.
 
 ## 저장소 구성
 
@@ -34,7 +34,7 @@ styles.css / site.js / config.js  정적 사이트
 bookmarklet.js                     U-FOLIO 추출·전송 코드
 apps-script/Code.gs               웹 앱 수신기
 apps-script/CaseSheetCore.gs      제한 집계식·비교 코어
-apps-script/CaseSheetDefaults.gs  11개 연결·53개 초기 매핑
+apps-script/CaseSheetDefaults.gs  11개 연결·63개 초기 매핑
 apps-script/CaseSheetSync.gs      읽기 전용 동기화·실패 격리
 apps-script/SystemSetup.gs        관리자 파일 생성·메뉴·새벽 3시 트리거
 config/ufolio-master-items.json   비식별 206개 마스터 항목
