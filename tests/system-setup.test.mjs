@@ -92,6 +92,29 @@ test("system setup exposes only the integration-admin workflow", () => {
   }
 });
 
+test("admin usability update makes dashboard and comparison the daily workflow", () => {
+  const source = readFileSync("apps-script/SystemSetup.gs", "utf8");
+  for (const required of [
+    "관리자 화면·서식 업데이트",
+    "function applyAdminUsabilityUpdate()",
+    "function sys_applyAdminUsability_(spreadsheet)",
+    "function sys_reorderAdminSheets_(spreadsheet)",
+    "function sys_ensureFilter_(sheet, width)",
+    "function sys_adminGuideLines_()",
+    "function sys_resetPresentationSheet_(sheet)",
+    "확인 필요 합계",
+    "마지막 동기화",
+    "평소에는 대시보드와 비교결과만 확인합니다.",
+    "setTabColor",
+    "moveActiveSheet",
+    "setFrozenColumns(3)",
+    "whenFormulaSatisfied",
+  ]) {
+    assert.equal(source.includes(required), true, `관리자 사용성 기능 누락: ${required}`);
+  }
+  assert.match(source, /\["대시보드", "비교결과", "연결진단", "동기화로그", "미매핑항목"/);
+});
+
 test("integration admin workbook declares every designed admin sheet", () => {
   const source = readFileSync("apps-script/SystemSetup.gs", "utf8");
   for (const sheetName of [

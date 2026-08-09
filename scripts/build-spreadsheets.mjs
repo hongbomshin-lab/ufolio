@@ -30,6 +30,20 @@ const palette = {
   white: "#FFFFFF",
 };
 
+const ADMIN_SHEET_ORDER = [
+  "대시보드",
+  "비교결과",
+  "연결진단",
+  "동기화로그",
+  "미매핑항목",
+  "현황시트연결",
+  "항목매핑",
+  "현황최신",
+  "유폴리오최신",
+  "마스터항목",
+  "사용안내",
+];
+
 const rawHeaders = ["수신시각", "전송 ID", "출석번호", "학번", "이름", "실습차수", "과", "메뉴/구분", "항목", "승인 수", "환자 수", "점수", "점수 원문"];
 const logHeaders = ["수신시각", "전송 ID", "출석번호", "학번", "이름", "항목 수", "상태", "상세 사유"];
 const masterHeaders = ["활성", "실습차수", "과", "메뉴/구분", "항목", "비교사용", "비교기준", "표시명"];
@@ -223,39 +237,38 @@ function addStatusRules(range) {
   }
 }
 
+function addComparisonStatusRules(range) {
+  const rules = [
+    ['=$J2="일치"', palette.paleGreen, "#166534"],
+    ['=$J2="반영대기"', palette.paleYellow, "#92400E"],
+    ['=OR($J2="현황누락의심",$J2="유폴리오미인증")', palette.paleRed, "#991B1B"],
+    ['=$J2="U-FOLIO측정값없음"', palette.paleYellow, "#92400E"],
+    ['=$J2="원본오류"', "#F4CCCC", "#991B1B"],
+    ['=$J2="원본노후"', palette.lavender, "#5B21B6"],
+  ];
+  for (const [formula, fill, color] of rules) {
+    range.conditionalFormats.addCustom(formula, { fill, font: { color } });
+  }
+}
+
 function buildAdminWorkbook() {
   const admin = Workbook.create();
-  addGuide(
-    admin,
-    "② 유폴리오 통합관리자",
-    "기존 케이스장 시트는 그대로 두고, 이 파일은 집계값만 읽어 U-FOLIO 최신 제출과 비교합니다.",
-    [
-      "이 파일은 관리자만 열람합니다. 학생에게 공유하지 않습니다.",
-      "현황시트연결의 노란 URL 칸에 각 원본 Google Sheets 링크를 입력하고 관리자 계정을 뷰어로 공유합니다.",
-      "① 사이트 인증 파일의 유폴리오 통합관리 메뉴에서 현황시트 연결 검사를 실행합니다.",
-      "항목매핑에서 검토필요 항목만 확인하고 확실한 것만 승인으로 바꿉니다.",
-      "지금 전체 동기화를 실행해 비교결과·연결진단을 확인합니다.",
-      "원본오류가 있어도 다른 소스는 갱신되고, 실패 소스는 마지막 정상 집계를 원본노후로 유지합니다.",
-      "새 현황시트는 현황시트연결과 항목매핑에 행을 추가합니다. 구조가 복잡할 때만 숨김 _UFOLIO_EXPORT 탭을 사용합니다.",
-    ],
-  );
-
   const dashboard = admin.worksheets.add("대시보드");
-  styleTitle(dashboard, "현황시트 × U-FOLIO 대시보드", "연결 상태와 차이 유형을 한눈에 확인합니다.", "H");
-  dashboard.getRange("A4:B4").values = [["지표", "값"]];
-  styleHeader(dashboard.getRange("A4:B4"));
-  dashboard.getRange("A5:A13").values = [["정상 연결"], ["오류·노후 연결"], ["비교 건수"], ["일치"], ["반영대기"], ["현황누락의심"], ["유폴리오미인증"], ["U-FOLIO측정값없음"], ["매핑대기"]];
-  dashboard.getRange("A5:A13").format = { fill: palette.paleBlue, font: { bold: true, color: palette.ink } };
-  dashboard.getRange("B5:B13").format = { fill: palette.paleGreen, font: { bold: true, color: palette.ink }, numberFormat: "0" };
-  dashboard.getRange("A:A").format.columnWidthPx = 200;
-  dashboard.getRange("B:B").format.columnWidthPx = 110;
-  dashboard.showGridLines = false;
+  const comparison = addTableSheet(admin, "비교결과", comparisonHeaders, [], [84, 120, 100, 120, 240, 82, 88, 98, 82, 140, 105, 130, 160]);
+  comparison.freezePanes.freezeColumns(3);
+  addComparisonStatusRules(comparison.getRange("A2:M20000"));
+  const diagnosticSheet = addTableSheet(admin, "연결진단", diagnosticHeaders, [], [160, 105, 70, 120, 560]);
+  // 시각 열 서식은 Apps Script 쪽에서만 미리 넓게 깐다. Google Sheets 는 이미 1000행이라 비용이 없지만
+  // xlsx 는 빈 행 999개를 실제로 만들어 버려서 복구용 파일이 빈 화면처럼 보인다.
+  addTableSheet(admin, "동기화로그", syncLogHeaders, [], [160, 90, 90, 100, 100, 100]);
+  const unmappedSheet = addTableSheet(admin, "미매핑항목", unmappedHeaders, [], [130, 105, 220, 90, 160, 520, 420]);
 
   const connectionSheet = addTableSheet(admin, "현황시트연결", defaults.connectionHeaders, defaults.connections, [110, 58, 125, 220, 390, 160, 92, 82, 92, 92, 82, 130, 160, 110, 420]);
   connectionSheet.getRange(`A2:L${defaults.connections.length + 1}`).format.fill = palette.paleYellow;
   connectionSheet.getRange(`M2:O${defaults.connections.length + 1}`).format.fill = palette.paleBlue;
   connectionSheet.getRange(`B2:B${defaults.connections.length + 1}`).dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
   connectionSheet.getRange(`L2:L${defaults.connections.length + 1}`).dataValidation = { rule: { type: "list", values: ["CONFIG", "_UFOLIO_EXPORT"] } };
+  connectionSheet.freezePanes.freezeColumns(4);
   addStatusRules(connectionSheet.getRange("N2:N1000"));
 
   const mappingSheet = addTableSheet(admin, "항목매핑", defaults.mappingHeaders, defaults.mappings, [130, 58, 90, 105, 220, 135, 135, 150, 520, 82, 90, 82, 390]);
@@ -267,29 +280,92 @@ function buildAdminWorkbook() {
   mappingSheet.getRange(`E2:I${defaults.mappings.length + 1}`).format.wrapText = true;
   mappingSheet.getRange(`M2:M${defaults.mappings.length + 1}`).format.wrapText = true;
   mappingSheet.getRange(`2:${defaults.mappings.length + 1}`).format.autofitRows();
+  mappingSheet.freezePanes.freezeColumns(4);
   addStatusRules(mappingSheet.getRange("C2:C2000"));
 
   addTableSheet(admin, "현황최신", snapshotHeaders, [], [160, 105, 130, 84, 120, 100, 120, 220, 82, 82, 92, 90, 82, 500, 90, 82, 100, 58]);
   addTableSheet(admin, "유폴리오최신", rawHeaders, [], [160, 230, 84, 120, 100, 190, 120, 170, 330, 82, 82, 82, 120]);
-  const comparison = addTableSheet(admin, "비교결과", comparisonHeaders, [], [84, 120, 100, 120, 240, 82, 88, 98, 82, 120, 105, 130, 160]);
-  addStatusRules(comparison.getRange("J2:J20000"));
-  addTableSheet(admin, "미매핑항목", unmappedHeaders, [], [130, 105, 220, 90, 160, 520, 420]);
-  addTableSheet(admin, "연결진단", diagnosticHeaders, [], [160, 105, 70, 120, 560]);
-  addTableSheet(admin, "동기화로그", syncLogHeaders, [], [160, 90, 90, 100, 100, 100]);
-
   const adminMaster = addTableSheet(admin, "마스터항목", masterHeaders, masterRows(), [58, 190, 125, 155, 330, 82, 88, 340]);
   adminMaster.freezePanes.freezeColumns(1);
-  dashboard.getRange("B5:B13").formulas = [
-    ["=COUNTIF('현황시트연결'!N2:N1000,\"정상\")"],
-    ["=COUNTIF('현황시트연결'!N2:N1000,\"원본오류\")+COUNTIF('현황시트연결'!N2:N1000,\"원본노후\")"],
-    ["=COUNTA('비교결과'!A2:A20000)"],
-    ["=COUNTIF('비교결과'!J2:J20000,\"일치\")"],
+  addGuide(
+    admin,
+    "② 유폴리오 통합관리자",
+    "기존 케이스장 시트는 그대로 두고, 이 파일은 집계값만 읽어 U-FOLIO 최신 제출과 비교합니다.",
+    [
+      "평소에는 대시보드와 비교결과만 확인합니다.",
+      "대시보드의 확인 필요 합계를 보고, 비교결과에서 상태 필터를 사용해 해당 학생만 확인합니다.",
+      "연결 오류가 있을 때만 연결진단과 동기화로그를 확인합니다.",
+      "현황시트연결과 항목매핑은 원본 시트나 규칙이 바뀔 때만 수정합니다. 노란 셀이 관리자 입력 영역입니다.",
+      "① 사이트 인증 파일의 유폴리오 통합관리 메뉴에서 지금 전체 동기화를 실행할 수 있습니다.",
+      "동기화가 정상인 것을 확인한 뒤 매일 새벽 3시 동기화를 켭니다.",
+      "이 파일은 관리자만 소유·열람하며 학생에게 공유하지 않습니다.",
+      "중앙 파일에는 학생별 집계값만 저장되며 원본의 환자·담당자·날짜·메모는 복사하지 않습니다.",
+    ],
+  );
+
+  styleTitle(dashboard, "현황시트 × U-FOLIO 통합 대시보드", "평소에는 이 화면과 비교결과만 확인하면 됩니다.", "H");
+  dashboard.getRange("A4:B4").values = [["오늘의 확인 항목", "건수"]];
+  dashboard.getRange("A5:A10").values = [["확인 필요 합계"], ["반영대기"], ["현황누락의심"], ["유폴리오미인증"], ["U-FOLIO측정값없음"], ["매핑대기"]];
+  dashboard.getRange("B5:B10").formulas = [
+    ["=SUM(B6:B10)"],
     ["=COUNTIF('비교결과'!J2:J20000,\"반영대기\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"현황누락의심\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"유폴리오미인증\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"U-FOLIO측정값없음\")"],
     ["=COUNTIF('비교결과'!J2:J20000,\"매핑대기\")"],
   ];
+  dashboard.getRange("D4:E4").values = [["운영 상태", "값"]];
+  dashboard.getRange("D5:D10").values = [["마지막 동기화"], ["정상 연결"], ["오류·노후 연결"], ["전체 비교 건수"], ["일치"], ["일치율"]];
+  dashboard.getRange("E5:E10").formulas = [
+    ["=IF(COUNTA('동기화로그'!A2:A1000)=0,\"아직 동기화 전\",MAX('동기화로그'!A2:A1000))"],
+    ["=COUNTIF('현황시트연결'!N2:N1000,\"정상\")"],
+    ["=COUNTIF('현황시트연결'!N2:N1000,\"원본오류\")+COUNTIF('현황시트연결'!N2:N1000,\"원본노후\")"],
+    ["=COUNTA('비교결과'!A2:A20000)"],
+    ["=COUNTIF('비교결과'!J2:J20000,\"일치\")"],
+    ["=IFERROR(E9/E8,0)"],
+  ];
+  dashboard.getRange("G4:H4").values = [["구분", "바로 보는 순서"]];
+  dashboard.getRange("G5:H10").values = [
+    ["평소 1", "대시보드 — 전체 상태 확인"],
+    ["평소 2", "비교결과 — 상태 필터로 학생 확인"],
+    ["오류 1", "연결진단 — 원본 오류 원인 확인"],
+    ["오류 2", "동기화로그 — 최근 실행 결과 확인"],
+    ["설정", "현황시트연결·항목매핑 — 구조 변경 때만"],
+    ["기술", "현황최신·유폴리오최신·마스터항목 — 문제 분석용"],
+  ];
+  for (const range of ["A4:B4", "D4:E4", "G4:H4"]) styleHeader(dashboard.getRange(range));
+  dashboard.getRange("A5:A10").format = { fill: palette.paleBlue, font: { bold: true, color: palette.ink } };
+  dashboard.getRange("B5:B10").format = { fill: palette.paleYellow, font: { bold: true, color: palette.ink }, numberFormat: "#,##0" };
+  dashboard.getRange("B5").format = { fill: "#F4B183", font: { bold: true, color: palette.ink, size: 14 }, numberFormat: "#,##0" };
+  dashboard.getRange("D5:D10").format = { fill: palette.paleBlue, font: { bold: true, color: palette.ink } };
+  dashboard.getRange("E5:E10").format = { fill: palette.paleGreen, font: { bold: true, color: palette.ink } };
+  dashboard.getRange("E5").format.numberFormat = "yyyy-mm-dd hh:mm";
+  dashboard.getRange("E6:E9").format.numberFormat = "#,##0";
+  dashboard.getRange("E10").format.numberFormat = "0.0%";
+  dashboard.getRange("G5:G10").format = { fill: "#E7E6E6", font: { bold: true, color: palette.ink }, horizontalAlignment: "center" };
+  dashboard.getRange("H5:H10").format = { fill: "#F8FAFC", font: { color: palette.ink }, wrapText: true };
+  dashboard.getRange("A13:H13").merge();
+  dashboard.getRange("A13").values = [["상태 읽는 법"]];
+  dashboard.getRange("A13:H13").format = { fill: palette.navy, font: { bold: true, color: palette.white }, horizontalAlignment: "center" };
+  for (const [range, value, fill] of [
+    ["A14:B14", "일치 · 조치 없음", palette.paleGreen],
+    ["C14:D14", "반영대기 · 사인/반영 확인", palette.paleYellow],
+    ["E14:F14", "누락의심·미인증 · 확인 필요", palette.paleRed],
+    ["G14:H14", "원본노후 · 연결 복구 필요", palette.lavender],
+  ]) {
+    dashboard.getRange(range).merge();
+    dashboard.getRange(range.split(":")[0]).values = [[value]];
+    dashboard.getRange(range).format = { fill, font: { color: palette.ink }, horizontalAlignment: "center", wrapText: true };
+  }
+  dashboard.getRange("A14:H14").format.rowHeightPx = 34;
+  [190, 90, 28, 170, 150, 28, 88, 360].forEach((width, index) => {
+    dashboard.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width;
+  });
+  dashboard.getRange("A4:H14").format.verticalAlignment = "center";
+  dashboard.freezePanes.freezeRows(4);
+  dashboard.showGridLines = false;
+
+  for (const sheetName of ADMIN_SHEET_ORDER) admin.worksheets.getItem(sheetName);
   return admin;
 }
 

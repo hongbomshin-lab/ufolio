@@ -70,12 +70,16 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.equal(mappings.OMS_I_D[1], "N");
   assert.equal(mappings.OMS_STAGE_BIOPSY[7], "COUNT_NONEMPTY(D:E)");
   assert.equal(mappings.OMS_STAGE_I_D[7], "COUNT_NONEMPTY(H:J)");
+  assert.match(mappings.OMS_STAGE_I_D[12], /2nd·3rd.*각각 1건/);
+  assert.match(mappings.OMS_STAGE_I_D[12], /follow-up.*2건/);
   assert.equal(mappings.OMS_STAGE_BIOPSY_TOTAL[7], "NONEMPTY_AS_ONE(F)");
   assert.match(mappings.OMS_STAGE_BIOPSY_TOTAL[8], /Total Case\|Biopsy$/);
   assert.equal(mappings.OMS_STAGE_BIOPSY_TOTAL[9], "승인수");
+  assert.match(mappings.OMS_STAGE_BIOPSY_TOTAL[12], /F열.*사인 완료/);
   assert.equal(mappings.OMS_STAGE_I_D_TOTAL[7], "NONEMPTY_AS_ONE(K)");
   assert.match(mappings.OMS_STAGE_I_D_TOTAL[8], /Total Case\|I & D$/);
   assert.equal(mappings.OMS_STAGE_I_D_TOTAL[9], "승인수");
+  assert.match(mappings.OMS_STAGE_I_D_TOTAL[12], /K열.*사인 완료/);
 
   assert.match(mappings.IMPLANT_TOTAL[8], /2개 이하 식립\)_\[A\]/);
   assert.match(mappings.IMPLANT_TOTAL[8], /3개 이상 식립\)_\[A\]/);
@@ -96,9 +100,13 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.equal(mappings.PROS_LAB[7], "VALUE(X)");
   assert.equal(mappings.PROS_LAB[9], "승인수");
   assert.equal(String(mappings.PROS_LAB[8]).split("\n").length, 3);
+  assert.match(mappings.PROS_LAB[12], /세 기공 항목.*승인 건수 합계/);
+  assert.doesNotMatch(mappings.PROS_LAB[12], /임시/);
   assert.equal(mappings.PROS_LAB_SCORE[7], "VALUE(Y)");
   assert.equal(mappings.PROS_LAB_SCORE[9], "점수");
   assert.equal(mappings.PROS_LAB_SCORE[8], mappings.PROS_LAB[8]);
+  assert.match(mappings.PROS_LAB_SCORE[12], /세 기공 항목.*점수 합계/);
+  assert.doesNotMatch(mappings.PROS_LAB_SCORE[12], /임시/);
 });
 
 test("review migration replaces managed keys and preserves custom rows", () => {

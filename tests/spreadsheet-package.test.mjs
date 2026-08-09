@@ -55,7 +55,7 @@ test("spreadsheet verifier expects the same two-workbook package", () => {
 test("cross-sheet dashboard formulas are authored after referenced sheets exist", () => {
   const connectionIndex = builder.indexOf('addTableSheet(admin, "현황시트연결"');
   const comparisonIndex = builder.indexOf('addTableSheet(admin, "비교결과"');
-  const formulaIndex = builder.indexOf('dashboard.getRange("B5:B13").formulas');
+  const formulaIndex = builder.indexOf('dashboard.getRange("B5:B10").formulas');
   assert.ok(connectionIndex >= 0 && comparisonIndex >= 0 && formulaIndex >= 0);
   assert.ok(connectionIndex < formulaIndex, "연결 시트보다 대시보드 수식을 먼저 기록함");
   assert.ok(comparisonIndex < formulaIndex, "비교 시트보다 대시보드 수식을 먼저 기록함");
@@ -65,4 +65,21 @@ test("long mapping fields wrap and rows autofit for operator review", () => {
   assert.equal(builder.includes('mappingSheet.getRange(`E2:I${defaults.mappings.length + 1}`).format.wrapText = true'), true);
   assert.equal(builder.includes('mappingSheet.getRange(`M2:M${defaults.mappings.length + 1}`).format.wrapText = true'), true);
   assert.equal(builder.includes('mappingSheet.getRange(`2:${defaults.mappings.length + 1}`).format.autofitRows()'), true);
+});
+
+test("generated admin workbook follows the daily-use sheet hierarchy", () => {
+  for (const required of [
+    "const ADMIN_SHEET_ORDER",
+    "확인 필요 합계",
+    "마지막 동기화",
+    "평소 1",
+    "대시보드 — 전체 상태 확인",
+    "비교결과 — 상태 필터로 학생 확인",
+    "addComparisonStatusRules",
+    "conditionalFormats.addCustom",
+    "comparison.freezePanes.freezeColumns(3)",
+  ]) {
+    assert.equal(builder.includes(required), true, `생성 워크북 사용성 요소 누락: ${required}`);
+  }
+  assert.match(builder, /const ADMIN_SHEET_ORDER = \[\s*"대시보드",\s*"비교결과",\s*"연결진단",\s*"동기화로그",\s*"미매핑항목"/);
 });
