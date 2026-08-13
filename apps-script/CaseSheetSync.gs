@@ -1,5 +1,6 @@
 var CASE_CONNECTION_SHEET = "현황시트연결";
 var CASE_MAPPING_SHEET = "항목매핑";
+var CASE_MEASUREMENT_SHEET = "측정값설정";
 var CASE_SNAPSHOT_SHEET = "현황최신";
 var CASE_UFOLIO_LATEST_SHEET = "유폴리오최신";
 var CASE_COMPARISON_SHEET = "비교결과";
@@ -14,8 +15,9 @@ var CASE_SNAPSHOT_HEADERS = [
 ];
 var CASE_COMPARISON_HEADERS = [
   "출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "U-FOLIO 값",
-  "차이", "상태", "소스키", "매핑키", "동기화시각",
+  "사인 대기 횟수", "최신 유폴 인증",
 ];
+var CASE_MEASUREMENT_HEADERS = ["실습차수", "과", "메뉴/구분", "항목", "측정값"];
 var CASE_UNMAPPED_HEADERS = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
 var CASE_DIAGNOSTIC_HEADERS = ["시각", "소스키", "행", "상태", "상세"];
 var CASE_SYNC_LOG_HEADERS = ["시각", "정상 소스", "실패 소스", "현황 집계", "비교 건수", "상태"];
@@ -95,8 +97,13 @@ function case_refreshAll_(services) {
   var now = services.now();
   var connections = services.getConnections().filter(function (row) { return String(row.active).toUpperCase() === "Y"; });
   var mappings = services.getMappings().filter(function (row) { return String(row.active).toUpperCase() === "Y"; });
+  var measurementSettings = services.getMeasurementSettings ? services.getMeasurementSettings() : {};
+  mappings.forEach(function (mapping) {
+    mapping.measurement = case_effectiveMeasurement_(mapping, measurementSettings);
+  });
   var previous = services.getPreviousSnapshot();
   var latestByKey = services.getLatestUfolio();
+  var latestSubmissionAt = services.getLatestSubmissionAt ? services.getLatestSubmissionAt() : {};
   var rosterByAttendance = {};
   services.getRoster().forEach(function (student) {
     rosterByAttendance[case_attendanceKey_(student.attendanceNo)] = student;
@@ -201,33 +208,24 @@ function case_refreshAll_(services) {
     if (!previousWinner || Number(row.priority || 0) > Number(previousWinner.priority || 0)) winnerByKey[signature] = row;
   });
 
+  // 비교결과에는 승인된 매핑만 올린다. 검토필요·보류는 (숨김) 미매핑항목에서만 관리한다.
   var comparisonRows = [];
   snapshotRows.forEach(function (row) {
-    if (row.reviewStatus !== "승인") {
-      comparisonRows.push(case_comparisonRow_(row, "", "매핑대기"));
-      return;
-    }
+    if (row.reviewStatus !== "승인") return;
     var signature = [row.studentId, row.measurement, String(row.ufolioTargets || "").split(/\r?\n/).sort().join("\n")].join("|");
     if (winnerByKey[signature] !== row) return;
-    if (row.stale || row.status === "원본노후") {
-      comparisonRows.push(case_comparisonRow_(row, "", "원본노후"));
-      return;
-    }
-    if (row.status === "원본오류") {
-      comparisonRows.push(case_comparisonRow_(row, "", "원본오류"));
-      return;
-    }
     var aggregated = case_aggregateUfolio_({
       ufolioTargets: row.ufolioTargets,
       measurement: row.measurement,
       aggregation: row.aggregation,
     }, latestByKey, row.studentId);
-    var ufolioValue = aggregated.found ? aggregated.value : "";
     if (case_isBlank_(row.sourceValue) && !aggregated.found) return;
-    var comparisonStatus = !aggregated.found && aggregated.targetFound
-      ? "U-FOLIO측정값없음"
-      : case_compareValues_(row.sourceValue, ufolioValue);
-    comparisonRows.push(case_comparisonRow_(row, ufolioValue, comparisonStatus));
+    var comparisonStatus;
+    if (row.stale || row.status === "원본노후") comparisonStatus = "원본노후";
+    else if (row.status === "원본오류") comparisonStatus = "원본오류";
+    else if (!aggregated.found && aggregated.targetFound) comparisonStatus = "U-FOLIO측정값없음";
+    else comparisonStatus = case_compareValues_(row.sourceValue, aggregated.found ? aggregated.value : "");
+    comparisonRows.push(case_comparisonRow_(row, aggregated, comparisonStatus, latestSubmissionAt[row.studentId] || ""));
   });
 
   snapshotRows.sort(case_snapshotSort_);
@@ -242,13 +240,9 @@ function case_refreshAll_(services) {
   };
 }
 
-function case_comparisonRow_(row, ufolioValue, status) {
-  var difference = "";
-  if (!case_isBlank_(row.sourceValue) && !case_isBlank_(ufolioValue)) {
-    var sourceNumber = Number(row.sourceValue);
-    var ufolioNumber = Number(ufolioValue);
-    if (isFinite(sourceNumber) && isFinite(ufolioNumber)) difference = sourceNumber - ufolioNumber;
-  }
+function case_comparisonRow_(row, aggregated, status, latestAuthAt) {
+  var authenticated = !!(aggregated && aggregated.targetFound);
+  var ufolioValue = aggregated && aggregated.found ? aggregated.value : "";
   return {
     attendanceNo: row.attendanceNo,
     studentId: row.studentId,
@@ -258,7 +252,9 @@ function case_comparisonRow_(row, ufolioValue, status) {
     measurement: row.measurement,
     sourceValue: row.sourceValue,
     ufolioValue: ufolioValue,
-    difference: difference,
+    ufolioDisplay: authenticated ? ufolioValue : "미인증",
+    pendingWait: aggregated ? aggregated.pending : "",
+    latestAuthAt: latestAuthAt || "",
     status: status,
     sourceKey: row.sourceKey,
     mappingKey: row.mappingKey,
@@ -320,9 +316,23 @@ function case_latestUfolioFromRows_(rows) {
         approvedCount: row[9],
         patientCount: row[10],
         score: row[11],
+        pendingCount: row[13],
         raw: row,
       };
     }
+  });
+  return latest;
+}
+
+function case_latestSubmissionFromRows_(rows) {
+  var latest = {};
+  rows.forEach(function (row) {
+    var studentId = String(row[3] == null ? "" : row[3]).trim();
+    if (!studentId) return;
+    var timestamp = new Date(row[0]).getTime();
+    if (!isFinite(timestamp)) return;
+    var previous = latest[studentId];
+    if (!previous || timestamp > previous.getTime()) latest[studentId] = new Date(timestamp);
   });
   return latest;
 }
@@ -340,6 +350,18 @@ function case_mappingObject_(row, departmentBySource) {
     label: row[4], completedExpression: row[5], plannedExpression: row[6], certificationExpression: row[7],
     ufolioTargets: row[8], measurement: row[9], aggregation: row[10], priority: row[11], note: row[12],
   };
+}
+
+function case_measurementSettingsFromRows_(rows) {
+  var settings = {};
+  rows.forEach(function (row) {
+    var key = case_itemKey_(row[0], row[1], row[2], row[3]);
+    var choice = String(row[4] == null ? "" : row[4]).replace(/\s+/g, "");
+    if (!row[0] || !choice) return;
+    if (CASE_MEASUREMENT_CHOICES.indexOf(choice) < 0) return;
+    settings[key] = choice;
+  });
+  return settings;
 }
 
 function case_snapshotArray_(row) {
@@ -361,19 +383,6 @@ function case_sheetRows_(sheet, width) {
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, width).getValues();
 }
 
-function case_siteSettings_(site) {
-  var sheet = site.getSheetByName("설정");
-  var settings = {};
-  case_sheetRows_(sheet, 2).forEach(function (row) { if (row[0]) settings[String(row[0])] = row[1]; });
-  return settings;
-}
-
-function case_getAdmin_(site) {
-  var settings = case_siteSettings_(site);
-  if (!settings.ADMIN_SPREADSHEET_ID) throw new Error("ADMIN_SPREADSHEET_ID가 없습니다. createIntegrationAdminWorkbook()을 먼저 실행하세요.");
-  return SpreadsheetApp.openById(String(settings.ADMIN_SPREADSHEET_ID));
-}
-
 function case_replaceOutput_(sheet, headers, rows) {
   if (!sheet) throw new Error("관리자 시트가 없습니다: " + headers[0]);
   var lastRow = sheet.getLastRow();
@@ -383,21 +392,24 @@ function case_replaceOutput_(sheet, headers, rows) {
   sheet.setFrozenRows(1);
 }
 
-function case_liveServices_(site, admin) {
-  var connectionRows = case_sheetRows_(admin.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS.length);
+function case_liveServices_(spreadsheet) {
+  var connectionRows = case_sheetRows_(spreadsheet.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS.length);
   var connections = connectionRows.map(case_connectionObject_);
   var departmentBySource = {};
   connections.forEach(function (row) { departmentBySource[row.sourceKey] = row.department; });
-  var mappingRows = case_sheetRows_(admin.getSheetByName(CASE_MAPPING_SHEET), CASE_MAPPING_HEADERS.length);
-  var rosterRows = case_sheetRows_(site.getSheetByName("학생명단"), 3);
-  var rawRows = case_sheetRows_(site.getSheetByName("RAW"), 13);
+  var mappingRows = case_sheetRows_(spreadsheet.getSheetByName(CASE_MAPPING_SHEET), CASE_MAPPING_HEADERS.length);
+  var measurementRows = case_sheetRows_(spreadsheet.getSheetByName(CASE_MEASUREMENT_SHEET), CASE_MEASUREMENT_HEADERS.length);
+  var rosterRows = case_sheetRows_(spreadsheet.getSheetByName("학생명단"), 3);
+  var rawRows = case_sheetRows_(spreadsheet.getSheetByName("RAW"), 14);
   return {
     now: function () { return new Date(); },
     getConnections: function () { return connections; },
     getMappings: function () { return mappingRows.map(function (row) { return case_mappingObject_(row, departmentBySource); }); },
+    getMeasurementSettings: function () { return case_measurementSettingsFromRows_(measurementRows); },
     getRoster: function () { return rosterRows.filter(function (row) { return row[0] !== ""; }).map(function (row) { return { attendanceNo: row[0], studentId: String(row[1]), name: row[2] }; }); },
-    getPreviousSnapshot: function () { return case_sheetRows_(admin.getSheetByName(CASE_SNAPSHOT_SHEET), CASE_SNAPSHOT_HEADERS.length).map(case_snapshotObject_); },
+    getPreviousSnapshot: function () { return case_sheetRows_(spreadsheet.getSheetByName(CASE_SNAPSHOT_SHEET), CASE_SNAPSHOT_HEADERS.length).map(case_snapshotObject_); },
     getLatestUfolio: function () { return case_latestUfolioFromRows_(rawRows); },
+    getLatestSubmissionAt: function () { return case_latestSubmissionFromRows_(rawRows); },
     readSource: case_readSource_,
   };
 }
@@ -406,39 +418,39 @@ function refreshIntegratedData() {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    var site = SpreadsheetApp.getActiveSpreadsheet();
-    var admin = case_getAdmin_(site);
-    var services = case_liveServices_(site, admin);
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var services = case_liveServices_(spreadsheet);
     var result = case_refreshAll_(services);
-    case_replaceOutput_(admin.getSheetByName(CASE_SNAPSHOT_SHEET), CASE_SNAPSHOT_HEADERS, result.snapshotRows.map(case_snapshotArray_));
+    case_replaceOutput_(spreadsheet.getSheetByName(CASE_SNAPSHOT_SHEET), CASE_SNAPSHOT_HEADERS, result.snapshotRows.map(case_snapshotArray_));
     var latest = services.getLatestUfolio();
     var latestRows = Object.keys(latest).map(function (key) { return latest[key].raw; }).sort(function (left, right) { return new Date(right[0]).getTime() - new Date(left[0]).getTime(); });
-    case_replaceOutput_(admin.getSheetByName(CASE_UFOLIO_LATEST_SHEET), RAW_HEADERS, latestRows);
-    case_replaceOutput_(admin.getSheetByName(CASE_COMPARISON_SHEET), CASE_COMPARISON_HEADERS, result.comparisonRows.map(function (row) {
-      return [row.attendanceNo, row.studentId, row.name, row.department, row.label, row.measurement, row.sourceValue, row.ufolioValue,
-        row.difference, row.status, row.sourceKey, row.mappingKey, row.syncedAt];
+    case_replaceOutput_(spreadsheet.getSheetByName(CASE_UFOLIO_LATEST_SHEET), RAW_HEADERS, latestRows);
+    case_replaceOutput_(spreadsheet.getSheetByName(CASE_COMPARISON_SHEET), CASE_COMPARISON_HEADERS, result.comparisonRows.map(function (row) {
+      return [row.attendanceNo, row.studentId, row.name, row.department, row.label, row.measurement, row.sourceValue,
+        row.ufolioDisplay, row.pendingWait, row.latestAuthAt];
     }));
-    case_replaceOutput_(admin.getSheetByName(CASE_UNMAPPED_SHEET), CASE_UNMAPPED_HEADERS, result.unmappedRows.map(function (row) {
+    case_replaceOutput_(spreadsheet.getSheetByName(CASE_UNMAPPED_SHEET), CASE_UNMAPPED_HEADERS, result.unmappedRows.map(function (row) {
       return [row.mappingKey, row.sourceKey, row.label, row.reviewStatus, row.certificationExpression, row.ufolioTargets, row.note];
     }));
-    case_replaceOutput_(admin.getSheetByName(CASE_DIAGNOSTIC_SHEET), CASE_DIAGNOSTIC_HEADERS, result.diagnostics.map(function (row) {
+    case_replaceOutput_(spreadsheet.getSheetByName(CASE_DIAGNOSTIC_SHEET), CASE_DIAGNOSTIC_HEADERS, result.diagnostics.map(function (row) {
       return [row.at, row.sourceKey, row.rowNumber, row.status, row.detail];
     }));
-    case_updateConnectionStatuses_(admin, result.connectionResults);
+    case_updateConnectionStatuses_(spreadsheet, result.connectionResults);
     var normalCount = result.connectionResults.filter(function (row) { return row.status === "정상"; }).length;
     var failedCount = result.connectionResults.length - normalCount;
-    var log = admin.getSheetByName(CASE_SYNC_LOG_SHEET);
+    var log = spreadsheet.getSheetByName(CASE_SYNC_LOG_SHEET);
     log.getRange(log.getLastRow() + 1, 1, 1, CASE_SYNC_LOG_HEADERS.length).setValues([[
       new Date(), normalCount, failedCount, result.snapshotRows.length, result.comparisonRows.length, failedCount ? "일부실패" : "성공",
     ]]);
+    dash_updateDashboard_(spreadsheet);
     return result;
   } finally {
     lock.releaseLock();
   }
 }
 
-function case_updateConnectionStatuses_(admin, results) {
-  var sheet = admin.getSheetByName(CASE_CONNECTION_SHEET);
+function case_updateConnectionStatuses_(spreadsheet, results) {
+  var sheet = spreadsheet.getSheetByName(CASE_CONNECTION_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return;
   var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, CASE_CONNECTION_HEADERS.length).getValues();
   var byKey = {};
@@ -454,9 +466,8 @@ function case_updateConnectionStatuses_(admin, results) {
 }
 
 function validateCaseConnections() {
-  var site = SpreadsheetApp.getActiveSpreadsheet();
-  var admin = case_getAdmin_(site);
-  var rows = case_sheetRows_(admin.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS.length).map(case_connectionObject_);
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var rows = case_sheetRows_(spreadsheet.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS.length).map(case_connectionObject_);
   var results = [];
   var diagnostics = [];
   rows.filter(function (row) { return String(row.active).toUpperCase() === "Y"; }).forEach(function (connection) {
@@ -470,6 +481,6 @@ function validateCaseConnections() {
       diagnostics.push([new Date(), connection.sourceKey, "", "원본오류", message]);
     }
   });
-  case_updateConnectionStatuses_(admin, results);
-  case_replaceOutput_(admin.getSheetByName(CASE_DIAGNOSTIC_SHEET), CASE_DIAGNOSTIC_HEADERS, diagnostics);
+  case_updateConnectionStatuses_(spreadsheet, results);
+  case_replaceOutput_(spreadsheet.getSheetByName(CASE_DIAGNOSTIC_SHEET), CASE_DIAGNOSTIC_HEADERS, diagnostics);
 }

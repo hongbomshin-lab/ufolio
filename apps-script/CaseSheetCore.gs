@@ -159,12 +159,19 @@ function case_recordMetric_(record, measurement) {
   throw new Error("지원하지 않는 U-FOLIO 측정값입니다: " + measurement);
 }
 
+function case_recordPending_(record) {
+  if (Array.isArray(record)) return record[13];
+  if (record && typeof record === "object") return record.pendingCount;
+  return "";
+}
+
 function case_aggregateUfolio_(mapping, latestByKey, studentId) {
   var targetText = String(mapping && mapping.ufolioTargets || "").trim();
   var targetLines = targetText ? targetText.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean) : [];
-  if (targetLines.length === 0) return { found: false, targetFound: false, value: "" };
+  if (targetLines.length === 0) return { found: false, targetFound: false, value: "", pending: "" };
   var numbers = [];
   var targetFound = false;
+  var pendingSum = 0;
   targetLines.forEach(function (line) {
     var target = line.split("|").map(function (part) { return part.trim(); });
     if (target.length !== 4 || target.some(function (part) { return !part; })) {
@@ -173,14 +180,39 @@ function case_aggregateUfolio_(mapping, latestByKey, studentId) {
     var record = latestByKey[case_ufolioKey_(studentId, target)];
     if (!record) return;
     targetFound = true;
+    var pendingValue = case_recordPending_(record);
+    if (!case_isBlank_(pendingValue)) pendingSum += case_numericValue_(pendingValue);
     var value = case_recordMetric_(record, mapping.measurement);
     if (case_isBlank_(value)) return;
     numbers.push(case_numericValue_(value));
   });
-  if (numbers.length === 0) return { found: false, targetFound: targetFound, value: "" };
+  var pending = targetFound ? pendingSum : "";
+  if (numbers.length === 0) return { found: false, targetFound: targetFound, value: "", pending: pending };
   var aggregation = String(mapping && mapping.aggregation || "SUM").trim().toUpperCase();
-  if (aggregation === "SUM") return { found: true, targetFound: true, value: numbers.reduce(function (sum, value) { return sum + value; }, 0) };
-  if (aggregation === "MAX") return { found: true, targetFound: true, value: Math.max.apply(null, numbers) };
-  if (aggregation === "FIRST") return { found: true, targetFound: true, value: numbers[0] };
+  if (aggregation === "SUM") return { found: true, targetFound: true, value: numbers.reduce(function (sum, value) { return sum + value; }, 0), pending: pending };
+  if (aggregation === "MAX") return { found: true, targetFound: true, value: Math.max.apply(null, numbers), pending: pending };
+  if (aggregation === "FIRST") return { found: true, targetFound: true, value: numbers[0], pending: pending };
   throw new Error("지원하지 않는 U-FOLIO 집계 방식입니다: " + aggregation);
+}
+
+function case_itemKey_(practice, department, menu, item) {
+  return [practice, department, menu, item].map(case_normalizeKeyPart_).join("|");
+}
+
+function case_firstTargetKey_(ufolioTargets) {
+  var line = String(ufolioTargets == null ? "" : ufolioTargets).split(/\r?\n/).map(function (value) { return value.trim(); }).filter(Boolean)[0];
+  if (!line) return "";
+  return line.split("|").map(case_normalizeKeyPart_).join("|");
+}
+
+var CASE_MEASUREMENT_CHOICES = ["승인수", "환자수", "점수"];
+
+// 측정값설정 시트가 매핑의 측정값보다 우선한다. 대상이 여러 항목인 매핑은 첫 항목의 설정을 따른다.
+function case_effectiveMeasurement_(mapping, settings) {
+  var key = case_firstTargetKey_(mapping && mapping.ufolioTargets);
+  var chosen = key && settings ? settings[key] : "";
+  if (chosen && CASE_MEASUREMENT_CHOICES.indexOf(String(chosen).replace(/\s+/g, "")) >= 0) {
+    return String(chosen).replace(/\s+/g, "");
+  }
+  return String(mapping && mapping.measurement || "승인수").replace(/\s+/g, "") || "승인수";
 }

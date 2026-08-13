@@ -15,14 +15,14 @@ const previewDir = path.join(outputDir, "previews");
 await fs.mkdir(previewDir, { recursive: true });
 
 const expectedSheets = {
-  "01_유폴리오_사이트인증.xlsx": ["사용안내", "설정", "학생명단", "마스터항목", "RAW", "전송기록"],
-  "02_유폴리오_통합관리자.xlsx": [
-    "사용안내", "대시보드", "현황시트연결", "항목매핑", "현황최신", "유폴리오최신",
-    "비교결과", "미매핑항목", "연결진단", "동기화로그", "마스터항목",
+  "01_유폴리오_통합.xlsx": [
+    "대시보드", "비교결과", "현황시트연결", "측정값설정",
+    "항목매핑", "미매핑항목", "연결진단", "동기화로그", "현황최신", "유폴리오최신",
+    "마스터항목", "학생명단", "RAW", "전송기록", "설정", "사용안내",
   ],
 };
 
-if (summary.files.length !== 2) throw new Error(`산출물 파일이 2개가 아닙니다: ${summary.files.length}`);
+if (summary.files.length !== 1) throw new Error(`산출물 파일이 1개가 아닙니다: ${summary.files.length}`);
 const summaryNames = summary.files.map((filePath) => path.basename(filePath)).sort();
 const expectedNames = Object.keys(expectedSheets).sort();
 if (JSON.stringify(summaryNames) !== JSON.stringify(expectedNames)) {
@@ -67,25 +67,23 @@ for (const filePath of summary.files) {
   const masterCount = master.getRange("A2:A500").values.filter((row) => row[0] !== "" && row[0] != null).length;
   if (masterCount !== 206) throw new Error(`${fileName} 마스터 항목이 206개가 아닙니다: ${masterCount}`);
 
-  let rosterCount = null;
-  let sourceCount = null;
-  let mappingCount = null;
-  let nonBlankSourceUrls = null;
-  if (fileName === "01_유폴리오_사이트인증.xlsx") {
-    const roster = workbook.worksheets.getItem("학생명단");
-    rosterCount = roster.getRange("A2:A500").values.filter((row) => row[0] !== "" && row[0] != null).length;
-    if (rosterCount !== summary.rosterCount) throw new Error(`명단 수가 빌드 요약과 다릅니다: ${rosterCount}`);
-  } else {
-    const connections = workbook.worksheets.getItem("현황시트연결");
-    sourceCount = connections.getRange("A2:A1000").values.filter((row) => row[0] !== "" && row[0] != null).length;
-    mappingCount = workbook.worksheets.getItem("항목매핑").getRange("A2:A2000").values.filter((row) => row[0] !== "" && row[0] != null).length;
-    nonBlankSourceUrls = connections.getRange("E2:E1000").values.filter((row) => row[0] !== "" && row[0] != null).length;
-    if (sourceCount !== 11) throw new Error(`현황시트 연결이 11개가 아닙니다: ${sourceCount}`);
-    if (mappingCount !== summary.mappingCount) throw new Error(`매핑 수가 빌드 요약과 다릅니다: ${mappingCount}`);
-    if (nonBlankSourceUrls !== 0) throw new Error("기본 현황시트 URL에 실제 값이 들어 있습니다.");
-  }
+  const measurementCount = workbook.worksheets.getItem("측정값설정").getRange("A2:A500").values.filter((row) => row[0] !== "" && row[0] != null).length;
+  if (measurementCount !== 206) throw new Error(`측정값설정 항목이 206개가 아닙니다: ${measurementCount}`);
+
+  const roster = workbook.worksheets.getItem("학생명단");
+  const rosterCount = roster.getRange("A2:A500").values.filter((row) => row[0] !== "" && row[0] != null).length;
+  if (rosterCount !== summary.rosterCount) throw new Error(`명단 수가 빌드 요약과 다릅니다: ${rosterCount}`);
+
+  const connections = workbook.worksheets.getItem("현황시트연결");
+  const sourceCount = connections.getRange("A2:A1000").values.filter((row) => row[0] !== "" && row[0] != null).length;
+  const mappingCount = workbook.worksheets.getItem("항목매핑").getRange("A2:A2000").values.filter((row) => row[0] !== "" && row[0] != null).length;
+  const nonBlankSourceUrls = connections.getRange("E2:E1000").values.filter((row) => row[0] !== "" && row[0] != null).length;
+  if (sourceCount !== 11) throw new Error(`현황시트 연결이 11개가 아닙니다: ${sourceCount}`);
+  if (mappingCount !== summary.mappingCount) throw new Error(`매핑 수가 빌드 요약과 다릅니다: ${mappingCount}`);
+  if (nonBlankSourceUrls !== 0) throw new Error("기본 현황시트 URL에 실제 값이 들어 있습니다.");
+
   if (formulaErrors.length > 0) throw new Error(`${fileName}에 수식 오류가 있습니다: ${formulaErrors[0]}`);
-  report.push({ fileName, sheets, rosterCount, masterCount, sourceCount, mappingCount, nonBlankSourceUrls, formulaErrors, previews });
+  report.push({ fileName, sheets, rosterCount, masterCount, measurementCount, sourceCount, mappingCount, nonBlankSourceUrls, formulaErrors, previews });
 }
 
 await fs.writeFile(path.join(outputDir, "verification-report.json"), JSON.stringify(report, null, 2), "utf8");
@@ -94,6 +92,7 @@ console.log(JSON.stringify(report.map((entry) => ({
   sheetCount: entry.sheets.length,
   rosterCount: entry.rosterCount,
   masterCount: entry.masterCount,
+  measurementCount: entry.measurementCount,
   sourceCount: entry.sourceCount,
   mappingCount: entry.mappingCount,
   formulaErrorCount: entry.formulaErrors.length,

@@ -30,8 +30,8 @@ function mapping(overrides = {}) {
   };
 }
 
-function latestRecord(value) {
-  return { approvedCount: value, patientCount: "", score: "" };
+function latestRecord(value, pending = "") {
+  return { approvedCount: value, patientCount: "", score: "", pendingCount: pending };
 }
 
 test("refresh isolates source failures and preserves failed source snapshots as stale", () => {
@@ -96,7 +96,7 @@ test("refresh isolates source failures and preserves failed source snapshots as 
   assert.match(result.diagnostics.find((row) => row.sourceKey === "FAIL").detail, /권한 없음/);
 });
 
-test("refresh excludes name mismatches and separates unapproved mappings", () => {
+test("refresh excludes name mismatches and keeps unapproved mappings out of the comparison", () => {
   const sync = loadSync();
   const services = {
     now: () => new Date("2026-08-06T03:00:00.000Z"),
@@ -124,10 +124,10 @@ test("refresh excludes name mismatches and separates unapproved mappings", () =>
   assert.ok(result.diagnostics.some((row) => row.status === "학생불일치" && row.rowNumber === 4));
   assert.equal(result.unmappedRows.length, 1);
   assert.equal(result.unmappedRows[0].mappingKey, "REVIEW");
-  assert.ok(result.comparisonRows.some((row) => row.mappingKey === "REVIEW" && row.status === "매핑대기"));
+  assert.equal(result.comparisonRows.some((row) => row.mappingKey === "REVIEW"), false);
 });
 
-test("refresh comparisons cover equal, pending, source-missing, and U-FOLIO-missing states", () => {
+test("refresh comparisons cover equal, pending, source-missing, and unauthenticated states", () => {
   const sync = loadSync();
   const target = "3학년 치의학 임상실습 2|치주과|증례별 임상참여|Flap Assist";
   const roster = [1, 2, 3, 4].map((attendanceNo) => ({
@@ -144,9 +144,14 @@ test("refresh comparisons cover equal, pending, source-missing, and U-FOLIO-miss
     getRoster: () => roster,
     getPreviousSnapshot: () => [],
     getLatestUfolio: () => ({
-      [`2024-00001|${target}`]: latestRecord(3),
+      [`2024-00001|${target}`]: latestRecord(3, 2),
       [`2024-00002|${target}`]: latestRecord(3),
       [`2024-00003|${target}`]: latestRecord(5),
+    }),
+    getLatestSubmissionAt: () => ({
+      "2024-00001": new Date("2026-08-05T22:10:00.000Z"),
+      "2024-00002": new Date("2026-08-05T21:00:00.000Z"),
+      "2024-00003": new Date("2026-08-05T20:00:00.000Z"),
     }),
     readSource: () => [
       { rowNumber: 3, values: [1, "학생1", 3] },
@@ -157,11 +162,65 @@ test("refresh comparisons cover equal, pending, source-missing, and U-FOLIO-miss
   };
 
   const result = sync.case_refreshAll_(services);
-  const statusByAttendance = Object.fromEntries(result.comparisonRows.map((row) => [row.attendanceNo, row.status]));
-  assert.equal(statusByAttendance[1], "일치");
-  assert.equal(statusByAttendance[2], "반영대기");
-  assert.equal(statusByAttendance[3], "현황누락의심");
-  assert.equal(statusByAttendance[4], "유폴리오미인증");
+  const byAttendance = Object.fromEntries(result.comparisonRows.map((row) => [row.attendanceNo, row]));
+  assert.equal(byAttendance[1].status, "일치");
+  assert.equal(byAttendance[2].status, "반영대기");
+  assert.equal(byAttendance[3].status, "현황누락의심");
+  assert.equal(byAttendance[4].status, "유폴리오미인증");
+
+  assert.equal(byAttendance[1].ufolioDisplay, 3);
+  assert.equal(byAttendance[4].ufolioDisplay, "미인증");
+  assert.equal(byAttendance[1].pendingWait, 2);
+  assert.equal(byAttendance[2].pendingWait, 0);
+  assert.equal(byAttendance[4].pendingWait, "");
+  assert.equal(byAttendance[1].latestAuthAt.toISOString(), "2026-08-05T22:10:00.000Z");
+  assert.equal(byAttendance[4].latestAuthAt, "");
+});
+
+test("measurement settings sheet overrides the mapping measurement", () => {
+  const sync = loadSync();
+  const target = "3학년 치의학 임상실습 2|치주과|증례별 임상참여|Flap Assist";
+  const services = {
+    now: () => new Date("2026-08-06T03:00:00.000Z"),
+    getConnections: () => [
+      { sourceKey: "GOOD", active: "Y", url: "sheet-good", attendanceColumn: "A", nameColumn: "B", priority: 80 },
+    ],
+    getMappings: () => [mapping({ ufolioTargets: target, measurement: "승인수" })],
+    getMeasurementSettings: () => ({ [target]: "환자수" }),
+    getRoster: () => [{ attendanceNo: 1, studentId: "2024-00001", name: "학생일" }],
+    getPreviousSnapshot: () => [],
+    getLatestUfolio: () => ({
+      [`2024-00001|${target}`]: { approvedCount: 3, patientCount: 7, score: "", pendingCount: "" },
+    }),
+    readSource: () => [{ rowNumber: 3, values: [1, "학생일", 7] }],
+  };
+
+  const result = sync.case_refreshAll_(services);
+  assert.equal(result.comparisonRows.length, 1);
+  assert.equal(result.comparisonRows[0].measurement, "환자수");
+  assert.equal(result.comparisonRows[0].ufolioValue, 7);
+  assert.equal(result.comparisonRows[0].status, "일치");
+});
+
+test("latest u-folio rows keep the pending count and per-student submission time", () => {
+  const sync = loadSync();
+  const rawRows = [
+    ["2026-08-05T10:00:00.000Z", "id-1", 1, "2024-00001", "학생일", "실습", "치주과", "증례별 임상참여", "Flap Assist", 2, "", "", "", 1],
+    ["2026-08-06T10:00:00.000Z", "id-2", 1, "2024-00001", "학생일", "실습", "치주과", "증례별 임상참여", "Flap Assist", 3, "", "", "", 4],
+  ];
+  const latest = sync.case_latestUfolioFromRows_(rawRows);
+  const record = latest["2024-00001|실습|치주과|증례별 임상참여|Flap Assist"];
+  assert.equal(record.approvedCount, 3);
+  assert.equal(record.pendingCount, 4);
+  const submissions = sync.case_latestSubmissionFromRows_(rawRows);
+  assert.equal(submissions["2024-00001"].toISOString(), "2026-08-06T10:00:00.000Z");
+});
+
+test("comparison sheet headers are the admin-facing nine columns plus latest auth time", () => {
+  const sync = loadSync();
+  assert.deepEqual(Array.from(sync.CASE_COMPARISON_HEADERS), [
+    "출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "U-FOLIO 값", "사인 대기 횟수", "최신 유폴 인증",
+  ]);
 });
 
 test("required source columns exclude identifier-detail columns from stage sheets", () => {

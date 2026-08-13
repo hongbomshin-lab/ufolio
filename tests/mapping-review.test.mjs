@@ -110,18 +110,18 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.doesNotMatch(mappings.PROS_LAB_SCORE[12], /임시/);
 });
 
-test("review migration replaces managed keys and preserves custom rows", () => {
+test("seed merge keeps existing rows and appends only missing defaults", () => {
   const setup = loadScripts("apps-script/SystemSetup.gs");
   const existing = [
-    ["KNOWN", "old"],
+    ["KNOWN", "edited-by-admin"],
     ["CUSTOM", "keep"],
   ];
-  const reviewed = [
-    ["KNOWN", "new"],
-    ["ADDED", "new"],
+  const seeds = [
+    ["KNOWN", "default"],
+    ["ADDED", "default"],
   ];
   assert.deepEqual(
-    Array.from(setup.sys_mergeReviewedRows_(existing, reviewed, 0), (row) => Array.from(row)),
-    [["KNOWN", "new"], ["CUSTOM", "keep"], ["ADDED", "new"]],
+    Array.from(setup.sys_mergeSeedRows_(existing, seeds, 0), (row) => Array.from(row)),
+    [["KNOWN", "edited-by-admin"], ["CUSTOM", "keep"], ["ADDED", "default"]],
   );
 });

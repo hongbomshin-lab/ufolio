@@ -10,6 +10,19 @@ function loadSystemSetup() {
   return context;
 }
 
+function loadFullSetup() {
+  const context = vm.createContext({ console, Date });
+  for (const file of [
+    "apps-script/CaseSheetCore.gs",
+    "apps-script/CaseSheetSync.gs",
+    "apps-script/CaseSheetDefaults.gs",
+    "apps-script/SystemSetup.gs",
+  ]) {
+    vm.runInContext(readFileSync(file, "utf8"), context, { filename: file });
+  }
+  return context;
+}
+
 function loadReceiverSetup() {
   const context = vm.createContext({ console });
   const source = readFileSync("apps-script/Code.gs", "utf8");
@@ -64,78 +77,61 @@ test("system setup keeps body formatting inside the sheet grid", () => {
   assert.equal(setup.sys_bodyRowCount_(2), 1);
 });
 
-test("system setup exposes only the integration-admin workflow", () => {
+test("system setup exposes only the unified single-workbook workflow", () => {
   const source = readFileSync("apps-script/SystemSetup.gs", "utf8");
   for (const forbidden of [
     "createLinkedWorkbooks",
-    "MANUAL_SPREADSHEET_ID",
-    "MANUAL_SPREADSHEET_URL",
-    "syncRosterToManual",
-    "applyManualItemVisibility",
-    "applyStudentRowProtections",
-    "installHourlyRefreshTrigger",
-    "② 유폴리오 수기입력",
-  ]) {
-    assert.equal(source.includes(forbidden), false, `레거시 수기 워크플로 잔존: ${forbidden}`);
-  }
-  for (const required of [
     "createIntegrationAdminWorkbook",
     "applyReviewedMappingCorrections",
+    "MANUAL_SPREADSHEET_ID",
+    "syncRosterToManual",
+    "installHourlyRefreshTrigger",
+    "② 유폴리오 수기입력",
+    "② 유폴리오 통합관리자",
+  ]) {
+    assert.equal(source.includes(forbidden), false, `레거시 워크플로 잔존: ${forbidden}`);
+  }
+  for (const required of [
+    "applyUnifiedWorkbookLayout",
+    "migrateAdminWorkbookIntoSite",
     "validateCaseConnections",
     "refreshIntegratedData",
     "installDailyRefreshTrigger",
     "removeRefreshTriggers",
-    "ADMIN_SPREADSHEET_ID",
+    "sys_seedMeasurementSettings_",
+    "dash_updateDashboard_",
     ".atHour(3).everyDays(1)",
   ]) {
-    assert.equal(source.includes(required), true, `통합 관리자 기능 누락: ${required}`);
+    assert.equal(source.includes(required), true, `통합 워크북 기능 누락: ${required}`);
   }
 });
 
-test("admin usability update makes dashboard and comparison the daily workflow", () => {
-  const source = readFileSync("apps-script/SystemSetup.gs", "utf8");
-  for (const required of [
-    "관리자 화면·서식 업데이트",
-    "function applyAdminUsabilityUpdate()",
-    "function sys_applyAdminUsability_(spreadsheet)",
-    "function sys_reorderAdminSheets_(spreadsheet)",
-    "function sys_ensureFilter_(sheet, width)",
-    "function sys_adminGuideLines_()",
-    "function sys_resetPresentationSheet_(sheet)",
-    "확인 필요 합계",
-    "마지막 동기화",
-    "평소에는 대시보드와 비교결과만 확인합니다.",
-    "setTabColor",
-    "moveActiveSheet",
-    "setFrozenColumns(3)",
-    "whenFormulaSatisfied",
-  ]) {
-    assert.equal(source.includes(required), true, `관리자 사용성 기능 누락: ${required}`);
+test("only the four admin-facing sheets stay visible and the rest are hidden", () => {
+  const setup = loadSystemSetup();
+  assert.deepEqual(Array.from(setup.SYS_VISIBLE_SHEETS), ["대시보드", "비교결과", "현황시트연결", "측정값설정"]);
+  const hidden = Array.from(setup.SYS_HIDDEN_SHEETS);
+  for (const name of ["항목매핑", "미매핑항목", "연결진단", "동기화로그", "현황최신", "유폴리오최신", "마스터항목", "학생명단", "RAW", "전송기록", "설정", "차트데이터", "사용안내"]) {
+    assert.ok(hidden.includes(name), `숨김 시트 누락: ${name}`);
   }
-  assert.match(source, /\["대시보드", "비교결과", "연결진단", "동기화로그", "미매핑항목"/);
+  const source = readFileSync("apps-script/SystemSetup.gs", "utf8");
+  assert.ok(source.includes("hideSheet()"), "시트 숨김 처리가 없습니다");
 });
 
-test("integration admin workbook declares every designed admin sheet", () => {
-  const source = readFileSync("apps-script/SystemSetup.gs", "utf8");
-  for (const sheetName of [
-    "사용안내",
-    "대시보드",
-    "현황시트연결",
-    "항목매핑",
-    "현황최신",
-    "유폴리오최신",
-    "비교결과",
-    "미매핑항목",
-    "연결진단",
-    "동기화로그",
-    "마스터항목",
-  ]) {
-    assert.equal(source.includes(`"${sheetName}"`), true, `관리자 시트 누락: ${sheetName}`);
-  }
+test("measurement defaults follow the reviewed mappings and fall back to approval counts", () => {
+  const setup = loadFullSetup();
+  const defaults = setup.sys_measurementDefaults_([]);
+  assert.equal(defaults["3학년 치의학 임상실습 2|보존과|증례별 임상참여|Endodontic treatment(practice)"], "점수");
+  assert.equal(defaults["3학년 치의학 임상실습 2|구강악안면외과|증례별 임상참여|외래 Recall check major"], "환자수");
+  assert.equal(defaults["3학년 치의학 임상실습 2|치주과|증례별 임상참여|Flap Assist"], "승인수");
+  assert.equal(defaults["3학년 치의학 임상실습 2|교정과|Total Case|없는항목"], undefined);
+
+  const customRows = [
+    ["CUSTOM", "Y", "승인", "PERIO", "라벨", "", "", "VALUE(C)", "3학년 치의학 임상실습 2|치주과|증례별 임상참여|Flap Assist", "점수", "SUM", 80, ""],
+  ];
   assert.equal(
-    source.includes("sys_setSettings_(spreadsheet, {"),
-    false,
-    "관리자 파일에는 별도 설정 탭을 만들지 않아야 함",
+    setup.sys_measurementDefaults_(customRows)["3학년 치의학 임상실습 2|치주과|증례별 임상참여|Flap Assist"],
+    "점수",
+    "이관된 항목매핑의 측정값이 기본값보다 우선해야 함",
   );
 });
 

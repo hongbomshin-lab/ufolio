@@ -6,7 +6,7 @@ import { buildSiteGuideLines } from "./spreadsheet-content.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const [rosterPath, outputDirArg] = process.argv.slice(2);
-const outputDir = outputDirArg ? path.resolve(outputDirArg) : path.join(rootDir, "outputs", "ufolio-case-integration-20260806");
+const outputDir = outputDirArg ? path.resolve(outputDirArg) : path.join(rootDir, "outputs", "ufolio-unified-workbook");
 const masterPath = path.join(rootDir, "config/ufolio-master-items.json");
 const defaultsPath = path.join(rootDir, "apps-script/CaseSheetDefaults.gs");
 
@@ -30,17 +30,23 @@ const palette = {
   white: "#FFFFFF",
 };
 
-const ADMIN_SHEET_ORDER = [
+// 보이는 시트 4개가 앞, 시스템 시트는 뒤. Google Sheets에서는 Apps Script 화면 구성 적용이 뒤쪽을 숨긴다.
+const UNIFIED_SHEET_ORDER = [
   "대시보드",
   "비교결과",
+  "현황시트연결",
+  "측정값설정",
+  "항목매핑",
+  "미매핑항목",
   "연결진단",
   "동기화로그",
-  "미매핑항목",
-  "현황시트연결",
-  "항목매핑",
   "현황최신",
   "유폴리오최신",
   "마스터항목",
+  "학생명단",
+  "RAW",
+  "전송기록",
+  "설정",
   "사용안내",
 ];
 
@@ -48,7 +54,8 @@ const rawHeaders = ["수신시각", "전송 ID", "출석번호", "학번", "이�
 const logHeaders = ["수신시각", "전송 ID", "출석번호", "학번", "이름", "항목 수", "상태", "상세 사유"];
 const masterHeaders = ["활성", "실습차수", "과", "메뉴/구분", "항목", "비교사용", "비교기준", "표시명"];
 const snapshotHeaders = ["동기화시각", "소스키", "매핑키", "출석번호", "학번", "이름", "과", "현황표시명", "완료값", "예정값", "인증대상값", "검토상태", "측정값", "U-FOLIO 대상", "집계방식", "우선순위", "상태", "노후"];
-const comparisonHeaders = ["출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "U-FOLIO 값", "차이", "상태", "소스키", "매핑키", "동기화시각"];
+const comparisonHeaders = ["출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "U-FOLIO 값", "사인 대기 횟수", "최신 유폴 인증"];
+const measurementHeaders = ["실습차수", "과", "메뉴/구분", "항목", "측정값"];
 const unmappedHeaders = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
 const diagnosticHeaders = ["시각", "소스키", "행", "상태", "상세"];
 const syncLogHeaders = ["시각", "정상 소스", "실패 소스", "현황 집계", "비교 건수", "상태"];
@@ -94,6 +101,39 @@ function colLetter(index) {
     value = Math.floor(value / 26);
   }
   return result;
+}
+
+function normalizeKeyPart(value) {
+  return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+}
+
+// Apps Script sys_measurementDefaults_ 와 같은 규칙: 승인 매핑 우선 → 전체 매핑 → 승인수.
+function measurementDefaults() {
+  const map = {};
+  const passes = [
+    (row) => String(row[1]).toUpperCase() === "Y" && row[2] === "승인",
+    () => true,
+  ];
+  for (const include of passes) {
+    for (const row of defaults.mappings) {
+      if (!include(row)) continue;
+      for (const line of String(row[8] || "").split(/\r?\n/)) {
+        const parts = line.split("|");
+        if (parts.length !== 4) continue;
+        const key = parts.map(normalizeKeyPart).join("|");
+        if (key && !map[key]) map[key] = String(row[9]).replace(/\s+/g, "");
+      }
+    }
+  }
+  return map;
+}
+
+function measurementRows() {
+  const byTarget = measurementDefaults();
+  return items.map((row) => {
+    const key = [row.practice, row.department, row.menu, row.item].map(normalizeKeyPart).join("|");
+    return [row.practice, row.department, row.menu, row.item, byTarget[key] || "승인수"];
+  });
 }
 
 function styleHeader(range, fill = palette.blue) {
@@ -174,104 +214,41 @@ function masterRows() {
   return items.map((row) => ["Y", row.practice, row.department, row.menu, row.item, "N", "승인수", `${row.menu} | ${row.item}`]);
 }
 
-function buildSiteWorkbook() {
-  const workbook = Workbook.create();
-  addGuide(
-    workbook,
-    "① 유폴리오 사이트 인증",
-    "학생 제출을 받는 관리자 전용 원본입니다. 이 파일의 RAW만 웹 앱 수신기가 기록합니다.",
-    buildSiteGuideLines(roster.length),
-  );
-
-  const workbookSettings = workbook.worksheets.add("설정");
-  workbookSettings.getRange("A1:C1").values = [["설정키", "값", "설명"]];
-  styleHeader(workbookSettings.getRange("A1:C1"));
-  workbookSettings.getRange("A2:C5").values = [
-    ["SITE_SPREADSHEET_ID", "", "현재 사이트 인증 파일 ID"],
-    ["ADMIN_SPREADSHEET_ID", "", "통합 관리자 파일 ID"],
-    ["ADMIN_SPREADSHEET_URL", "", "관리자 전용 파일 URL"],
-    ["LAST_REFRESHED_AT", "", "마지막 통합 동기화 시각"],
-  ];
-  styleBody(workbookSettings.getRange("A2:C5"));
-  workbookSettings.getRange("B2:B5").format.fill = palette.paleYellow;
-  [220, 430, 360].forEach((width, index) => {
-    workbookSettings.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width;
-  });
-  workbookSettings.freezePanes.freezeRows(1);
-  workbookSettings.showGridLines = false;
-
-  const rosterSheet = addTableSheet(workbook, "학생명단", ["출석번호", "학번", "이름", "이메일(선택)"], roster.map((row) => [...row, ""]), [84, 120, 100, 230]);
-  rosterSheet.getRange(`B2:B${roster.length + 1}`).format.numberFormat = "@";
-  rosterSheet.getRange(`D2:D${roster.length + 1}`).format.fill = palette.paleYellow;
-
-  const masterSheet = addTableSheet(workbook, "마스터항목", masterHeaders, masterRows(), [58, 190, 125, 155, 330, 82, 88, 340]);
-  masterSheet.getRange("A2:A207").dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
-  masterSheet.getRange("F2:F207").dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
-  masterSheet.getRange("G2:G207").dataValidation = { rule: { type: "list", values: ["승인수", "환자수", "점수"] } };
-  masterSheet.getRange("F2:H207").format.fill = palette.paleYellow;
-  masterSheet.freezePanes.freezeColumns(1);
-
-  const raw = addTableSheet(workbook, "RAW", rawHeaders, [], [160, 230, 84, 120, 100, 190, 120, 170, 330, 82, 82, 82, 120, 92]);
-  raw.getRange("D:D").format.numberFormat = "@";
-  addTableSheet(workbook, "전송기록", logHeaders, [], [160, 230, 84, 120, 100, 82, 82, 420]);
-  return workbook;
-}
-
-function addStatusRules(range) {
+function addComparisonRules(range) {
   const rules = [
-    ["일치", palette.paleGreen, "#166534"],
-    ["정상", palette.paleGreen, "#166534"],
-    ["반영대기", palette.paleYellow, "#92400E"],
-    ["매핑대기", palette.paleYellow, "#92400E"],
-    ["U-FOLIO측정값없음", palette.paleYellow, "#92400E"],
-    ["현황누락의심", palette.paleRed, "#991B1B"],
-    ["유폴리오미인증", palette.paleRed, "#991B1B"],
-    ["원본오류", "#F4CCCC", "#991B1B"],
-    ["원본노후", palette.lavender, "#5B21B6"],
-  ];
-  for (const [text, fill, color] of rules) {
-    range.conditionalFormats.add("containsText", {
-      text,
-      format: { fill, font: { color, bold: true } },
-    });
-  }
-}
-
-function addComparisonStatusRules(range) {
-  const rules = [
-    ['=$J2="일치"', palette.paleGreen, "#166534"],
-    ['=$J2="반영대기"', palette.paleYellow, "#92400E"],
-    ['=OR($J2="현황누락의심",$J2="유폴리오미인증")', palette.paleRed, "#991B1B"],
-    ['=$J2="U-FOLIO측정값없음"', palette.paleYellow, "#92400E"],
-    ['=$J2="원본오류"', "#F4CCCC", "#991B1B"],
-    ['=$J2="원본노후"', palette.lavender, "#5B21B6"],
+    ['=$H2="미인증"', palette.paleRed, "#991B1B"],
+    ['=AND($H2<>"",$H2<>"미인증",$G2<>$H2)', palette.paleYellow, "#92400E"],
+    ['=AND($H2<>"",$H2<>"미인증",$G2=$H2)', palette.paleGreen, "#166534"],
   ];
   for (const [formula, fill, color] of rules) {
     range.conditionalFormats.addCustom(formula, { fill, font: { color } });
   }
 }
 
-function buildAdminWorkbook() {
-  const admin = Workbook.create();
-  const dashboard = admin.worksheets.add("대시보드");
-  const comparison = addTableSheet(admin, "비교결과", comparisonHeaders, [], [84, 120, 100, 120, 240, 82, 88, 98, 82, 140, 105, 130, 160]);
-  comparison.freezePanes.freezeColumns(3);
-  addComparisonStatusRules(comparison.getRange("A2:M20000"));
-  const diagnosticSheet = addTableSheet(admin, "연결진단", diagnosticHeaders, [], [160, 105, 70, 120, 560]);
-  // 시각 열 서식은 Apps Script 쪽에서만 미리 넓게 깐다. Google Sheets 는 이미 1000행이라 비용이 없지만
-  // xlsx 는 빈 행 999개를 실제로 만들어 버려서 복구용 파일이 빈 화면처럼 보인다.
-  addTableSheet(admin, "동기화로그", syncLogHeaders, [], [160, 90, 90, 100, 100, 100]);
-  const unmappedSheet = addTableSheet(admin, "미매핑항목", unmappedHeaders, [], [130, 105, 220, 90, 160, 520, 420]);
+function buildUnifiedWorkbook() {
+  const workbook = Workbook.create();
 
-  const connectionSheet = addTableSheet(admin, "현황시트연결", defaults.connectionHeaders, defaults.connections, [110, 58, 125, 220, 390, 160, 92, 82, 92, 92, 82, 130, 160, 110, 420]);
+  // 대시보드 실물(항목×학생 매트릭스와 분포 차트)은 Apps Script가 그린다. xlsx에는 안내만 남긴다.
+  const dashboard = workbook.worksheets.add("대시보드");
+  styleTitle(dashboard, "유폴리오 대시보드", "Google Sheets로 변환한 뒤 유폴리오 통합관리 → 화면 구성 새로 적용을 실행하면 항목×학생 매트릭스와 분포 그래프가 이 자리에 생성됩니다.", "H");
+
+  const comparison = addTableSheet(workbook, "비교결과", comparisonHeaders, [], [84, 120, 100, 120, 240, 82, 88, 98, 92, 150]);
+  comparison.freezePanes.freezeColumns(3);
+  addComparisonRules(comparison.getRange("A2:J20000"));
+
+  const connectionSheet = addTableSheet(workbook, "현황시트연결", defaults.connectionHeaders, defaults.connections, [110, 58, 125, 220, 390, 160, 92, 82, 92, 92, 82, 130, 160, 110, 420]);
   connectionSheet.getRange(`A2:L${defaults.connections.length + 1}`).format.fill = palette.paleYellow;
   connectionSheet.getRange(`M2:O${defaults.connections.length + 1}`).format.fill = palette.paleBlue;
   connectionSheet.getRange(`B2:B${defaults.connections.length + 1}`).dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
   connectionSheet.getRange(`L2:L${defaults.connections.length + 1}`).dataValidation = { rule: { type: "list", values: ["CONFIG", "_UFOLIO_EXPORT"] } };
   connectionSheet.freezePanes.freezeColumns(4);
-  addStatusRules(connectionSheet.getRange("N2:N1000"));
 
-  const mappingSheet = addTableSheet(admin, "항목매핑", defaults.mappingHeaders, defaults.mappings, [130, 58, 90, 105, 220, 135, 135, 150, 520, 82, 90, 82, 390]);
+  const measurement = addTableSheet(workbook, "측정값설정", measurementHeaders, measurementRows(), [190, 125, 155, 330, 92]);
+  measurement.getRange("E2:E207").dataValidation = { rule: { type: "list", values: ["승인수", "환자수", "점수"] } };
+  measurement.getRange("E2:E207").format.fill = palette.paleYellow;
+  measurement.freezePanes.freezeColumns(4);
+
+  const mappingSheet = addTableSheet(workbook, "항목매핑", defaults.mappingHeaders, defaults.mappings, [130, 58, 90, 105, 220, 135, 135, 150, 520, 82, 90, 82, 390]);
   mappingSheet.getRange(`A2:M${defaults.mappings.length + 1}`).format.fill = palette.paleYellow;
   mappingSheet.getRange(`B2:B${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
   mappingSheet.getRange(`C2:C${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["승인", "검토필요", "보류"] } };
@@ -281,92 +258,52 @@ function buildAdminWorkbook() {
   mappingSheet.getRange(`M2:M${defaults.mappings.length + 1}`).format.wrapText = true;
   mappingSheet.getRange(`2:${defaults.mappings.length + 1}`).format.autofitRows();
   mappingSheet.freezePanes.freezeColumns(4);
-  addStatusRules(mappingSheet.getRange("C2:C2000"));
 
-  addTableSheet(admin, "현황최신", snapshotHeaders, [], [160, 105, 130, 84, 120, 100, 120, 220, 82, 82, 92, 90, 82, 500, 90, 82, 100, 58]);
-  addTableSheet(admin, "유폴리오최신", rawHeaders, [], [160, 230, 84, 120, 100, 190, 120, 170, 330, 82, 82, 82, 120, 92]);
-  const adminMaster = addTableSheet(admin, "마스터항목", masterHeaders, masterRows(), [58, 190, 125, 155, 330, 82, 88, 340]);
-  adminMaster.freezePanes.freezeColumns(1);
+  addTableSheet(workbook, "미매핑항목", unmappedHeaders, [], [130, 105, 220, 90, 160, 520, 420]);
+  addTableSheet(workbook, "연결진단", diagnosticHeaders, [], [160, 105, 70, 120, 560]);
+  addTableSheet(workbook, "동기화로그", syncLogHeaders, [], [160, 90, 90, 100, 100, 100]);
+  addTableSheet(workbook, "현황최신", snapshotHeaders, [], [160, 105, 130, 84, 120, 100, 120, 220, 82, 82, 92, 90, 82, 500, 90, 82, 100, 58]);
+  addTableSheet(workbook, "유폴리오최신", rawHeaders, [], [160, 230, 84, 120, 100, 190, 120, 170, 330, 82, 82, 82, 120, 92]);
+
+  const masterSheet = addTableSheet(workbook, "마스터항목", masterHeaders, masterRows(), [58, 190, 125, 155, 330, 82, 88, 340]);
+  masterSheet.getRange("A2:A207").dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
+  masterSheet.getRange("F2:F207").dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
+  masterSheet.getRange("G2:G207").dataValidation = { rule: { type: "list", values: ["승인수", "환자수", "점수"] } };
+  masterSheet.getRange("F2:H207").format.fill = palette.paleYellow;
+  masterSheet.freezePanes.freezeColumns(1);
+
+  const rosterSheet = addTableSheet(workbook, "학생명단", ["출석번호", "학번", "이름", "이메일(선택)"], roster.map((row) => [...row, ""]), [84, 120, 100, 230]);
+  rosterSheet.getRange(`B2:B${roster.length + 1}`).format.numberFormat = "@";
+  rosterSheet.getRange(`D2:D${roster.length + 1}`).format.fill = palette.paleYellow;
+
+  const raw = addTableSheet(workbook, "RAW", rawHeaders, [], [160, 230, 84, 120, 100, 190, 120, 170, 330, 82, 82, 82, 120, 92]);
+  raw.getRange("D:D").format.numberFormat = "@";
+  addTableSheet(workbook, "전송기록", logHeaders, [], [160, 230, 84, 120, 100, 82, 82, 420]);
+
+  const workbookSettings = workbook.worksheets.add("설정");
+  workbookSettings.getRange("A1:C1").values = [["설정키", "값", "설명"]];
+  styleHeader(workbookSettings.getRange("A1:C1"));
+  workbookSettings.getRange("A2:C3").values = [
+    ["SITE_SPREADSHEET_ID", "", "이 파일의 ID"],
+    ["LAST_REFRESHED_AT", "", "마지막 통합 동기화 시각"],
+  ];
+  styleBody(workbookSettings.getRange("A2:C3"));
+  workbookSettings.getRange("B2:B3").format.fill = palette.paleYellow;
+  [220, 430, 360].forEach((width, index) => {
+    workbookSettings.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width;
+  });
+  workbookSettings.freezePanes.freezeRows(1);
+  workbookSettings.showGridLines = false;
+
   addGuide(
-    admin,
-    "② 유폴리오 통합관리자",
-    "기존 케이스장 시트는 그대로 두고, 이 파일은 집계값만 읽어 U-FOLIO 최신 제출과 비교합니다.",
-    [
-      "평소에는 대시보드와 비교결과만 확인합니다.",
-      "대시보드의 확인 필요 합계를 보고, 비교결과에서 상태 필터를 사용해 해당 학생만 확인합니다.",
-      "연결 오류가 있을 때만 연결진단과 동기화로그를 확인합니다.",
-      "현황시트연결과 항목매핑은 원본 시트나 규칙이 바뀔 때만 수정합니다. 노란 셀이 관리자 입력 영역입니다.",
-      "① 사이트 인증 파일의 유폴리오 통합관리 메뉴에서 지금 전체 동기화를 실행할 수 있습니다.",
-      "동기화가 정상인 것을 확인한 뒤 매일 새벽 3시 동기화를 켭니다.",
-      "이 파일은 관리자만 소유·열람하며 학생에게 공유하지 않습니다.",
-      "중앙 파일에는 학생별 집계값만 저장되며 원본의 환자·담당자·날짜·메모는 복사하지 않습니다.",
-    ],
+    workbook,
+    "유폴리오 통합 시트",
+    "학생 제출 수신과 현황시트 비교를 한 파일에서 처리합니다. 관리자만 열람합니다.",
+    buildSiteGuideLines(roster.length),
   );
 
-  styleTitle(dashboard, "현황시트 × U-FOLIO 통합 대시보드", "평소에는 이 화면과 비교결과만 확인하면 됩니다.", "H");
-  dashboard.getRange("A4:B4").values = [["오늘의 확인 항목", "건수"]];
-  dashboard.getRange("A5:A10").values = [["확인 필요 합계"], ["반영대기"], ["현황누락의심"], ["유폴리오미인증"], ["U-FOLIO측정값없음"], ["매핑대기"]];
-  dashboard.getRange("B5:B10").formulas = [
-    ["=SUM(B6:B10)"],
-    ["=COUNTIF('비교결과'!J2:J20000,\"반영대기\")"],
-    ["=COUNTIF('비교결과'!J2:J20000,\"현황누락의심\")"],
-    ["=COUNTIF('비교결과'!J2:J20000,\"유폴리오미인증\")"],
-    ["=COUNTIF('비교결과'!J2:J20000,\"U-FOLIO측정값없음\")"],
-    ["=COUNTIF('비교결과'!J2:J20000,\"매핑대기\")"],
-  ];
-  dashboard.getRange("D4:E4").values = [["운영 상태", "값"]];
-  dashboard.getRange("D5:D10").values = [["마지막 동기화"], ["정상 연결"], ["오류·노후 연결"], ["전체 비교 건수"], ["일치"], ["일치율"]];
-  dashboard.getRange("E5:E10").formulas = [
-    ["=IF(COUNTA('동기화로그'!A2:A1000)=0,\"아직 동기화 전\",MAX('동기화로그'!A2:A1000))"],
-    ["=COUNTIF('현황시트연결'!N2:N1000,\"정상\")"],
-    ["=COUNTIF('현황시트연결'!N2:N1000,\"원본오류\")+COUNTIF('현황시트연결'!N2:N1000,\"원본노후\")"],
-    ["=COUNTA('비교결과'!A2:A20000)"],
-    ["=COUNTIF('비교결과'!J2:J20000,\"일치\")"],
-    ["=IFERROR(E9/E8,0)"],
-  ];
-  dashboard.getRange("G4:H4").values = [["구분", "바로 보는 순서"]];
-  dashboard.getRange("G5:H10").values = [
-    ["평소 1", "대시보드 — 전체 상태 확인"],
-    ["평소 2", "비교결과 — 상태 필터로 학생 확인"],
-    ["오류 1", "연결진단 — 원본 오류 원인 확인"],
-    ["오류 2", "동기화로그 — 최근 실행 결과 확인"],
-    ["설정", "현황시트연결·항목매핑 — 구조 변경 때만"],
-    ["기술", "현황최신·유폴리오최신·마스터항목 — 문제 분석용"],
-  ];
-  for (const range of ["A4:B4", "D4:E4", "G4:H4"]) styleHeader(dashboard.getRange(range));
-  dashboard.getRange("A5:A10").format = { fill: palette.paleBlue, font: { bold: true, color: palette.ink } };
-  dashboard.getRange("B5:B10").format = { fill: palette.paleYellow, font: { bold: true, color: palette.ink }, numberFormat: "#,##0" };
-  dashboard.getRange("B5").format = { fill: "#F4B183", font: { bold: true, color: palette.ink, size: 14 }, numberFormat: "#,##0" };
-  dashboard.getRange("D5:D10").format = { fill: palette.paleBlue, font: { bold: true, color: palette.ink } };
-  dashboard.getRange("E5:E10").format = { fill: palette.paleGreen, font: { bold: true, color: palette.ink } };
-  dashboard.getRange("E5").format.numberFormat = "yyyy-mm-dd hh:mm";
-  dashboard.getRange("E6:E9").format.numberFormat = "#,##0";
-  dashboard.getRange("E10").format.numberFormat = "0.0%";
-  dashboard.getRange("G5:G10").format = { fill: "#E7E6E6", font: { bold: true, color: palette.ink }, horizontalAlignment: "center" };
-  dashboard.getRange("H5:H10").format = { fill: "#F8FAFC", font: { color: palette.ink }, wrapText: true };
-  dashboard.getRange("A13:H13").merge();
-  dashboard.getRange("A13").values = [["상태 읽는 법"]];
-  dashboard.getRange("A13:H13").format = { fill: palette.navy, font: { bold: true, color: palette.white }, horizontalAlignment: "center" };
-  for (const [range, value, fill] of [
-    ["A14:B14", "일치 · 조치 없음", palette.paleGreen],
-    ["C14:D14", "반영대기 · 사인/반영 확인", palette.paleYellow],
-    ["E14:F14", "누락의심·미인증 · 확인 필요", palette.paleRed],
-    ["G14:H14", "원본노후 · 연결 복구 필요", palette.lavender],
-  ]) {
-    dashboard.getRange(range).merge();
-    dashboard.getRange(range.split(":")[0]).values = [[value]];
-    dashboard.getRange(range).format = { fill, font: { color: palette.ink }, horizontalAlignment: "center", wrapText: true };
-  }
-  dashboard.getRange("A14:H14").format.rowHeightPx = 34;
-  [190, 90, 28, 170, 150, 28, 88, 360].forEach((width, index) => {
-    dashboard.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width;
-  });
-  dashboard.getRange("A4:H14").format.verticalAlignment = "center";
-  dashboard.freezePanes.freezeRows(4);
-  dashboard.showGridLines = false;
-
-  for (const sheetName of ADMIN_SHEET_ORDER) admin.worksheets.getItem(sheetName);
-  return admin;
+  for (const sheetName of UNIFIED_SHEET_ORDER) workbook.worksheets.getItem(sheetName);
+  return workbook;
 }
 
 async function saveWorkbook(workbook, fileName) {
@@ -377,12 +314,7 @@ async function saveWorkbook(workbook, fileName) {
 }
 
 await fs.mkdir(outputDir, { recursive: true });
-const workbooks = [
-  [buildSiteWorkbook(), "01_유폴리오_사이트인증.xlsx"],
-  [buildAdminWorkbook(), "02_유폴리오_통합관리자.xlsx"],
-];
-const files = [];
-for (const [workbook, fileName] of workbooks) files.push(await saveWorkbook(workbook, fileName));
+const files = [await saveWorkbook(buildUnifiedWorkbook(), "01_유폴리오_통합.xlsx")];
 
 const summary = {
   rosterCount: roster.length,

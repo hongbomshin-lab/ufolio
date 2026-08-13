@@ -4,7 +4,7 @@
 
 ## 기본 사용 순서
 
-실제 명단과 마스터항목이 포함된 로컬 `outputs/.../01_유폴리오_사이트인증.xlsx`를 Google Sheets로 변환하고, Apps Script 5개 파일을 붙여넣은 뒤 `createIntegrationAdminWorkbook()`을 실행합니다. 전체 순서는 `docs/GOOGLE_SHEETS_SETUP.md`를 따르세요.
+실제 명단과 마스터항목이 포함된 로컬 `outputs/.../01_유폴리오_통합.xlsx`를 Google Sheets로 변환하고, Apps Script 6개 파일을 붙여넣은 뒤 메뉴 `유폴리오 통합관리 → 화면 구성 새로 적용`을 실행합니다. 전체 순서는 `docs/GOOGLE_SHEETS_SETUP.md`를 따르세요.
 
 ## SeedRoster 대체 절차
 
