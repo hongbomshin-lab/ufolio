@@ -42,6 +42,7 @@ test("createSubmission preserves all score metrics", () => {
         menuName: "증례별 임상참여",
         itemName: "Observation case",
         approvedCount: "3",
+        pendingCount: "2",
         patientCount: 0,
         score: "6.5",
         scoreRaw: "6.5",
@@ -64,6 +65,7 @@ test("createSubmission preserves all score metrics", () => {
         menuName: "증례별 임상참여",
         itemName: "Observation case",
         approvedCount: 3,
+        pendingCount: 2,
         patientCount: 0,
         score: 6.5,
         scoreRaw: "6.5",
@@ -84,6 +86,18 @@ test("buildBookmarklet creates one universal u-folio collector", () => {
   assert.match(source, /mode:\s*["']no-cors["']/);
   assert.match(source, /전송 요청 완료/);
   assert.doesNotMatch(source, /login_id|달신 아이디|2024-12345/);
+});
+
+test("buildBookmarklet targets 임상실습 2 without a practice picker", () => {
+  const source = decodeURIComponent(
+    buildBookmarklet("https://script.google.com/macros/s/EXAMPLE_DEPLOYMENT/exec").slice(
+      "javascript:".length,
+    ),
+  );
+
+  assert.match(source, /임상실습\\s\*2/);
+  assert.doesNotMatch(source, /ufc-practice/);
+  assert.match(source, /pendingCount/);
 });
 
 test("buildBookmarklet rejects missing or non-Apps-Script URLs", () => {

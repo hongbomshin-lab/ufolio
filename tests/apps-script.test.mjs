@@ -24,6 +24,7 @@ function validPayload(overrides = {}) {
         menuName: "증례별 임상참여",
         itemName: "Observation case",
         approvedCount: 3,
+        pendingCount: 2,
         patientCount: 0,
         score: 6.5,
         scoreRaw: "6.5",
@@ -57,7 +58,7 @@ test("processSubmission_ maps a roster match and preserves every metric", () => 
   const result = receiver.processSubmission_(validPayload(), services);
 
   assert.equal(result.ok, true);
-  assert.deepEqual(Array.from(state.rawRows[0].slice(2, 13)), [
+  assert.deepEqual(Array.from(state.rawRows[0].slice(2, 14)), [
     7,
     "2024-54321",
     "테스트학생",
@@ -69,6 +70,7 @@ test("processSubmission_ maps a roster match and preserves every metric", () => 
     0,
     6.5,
     "6.5",
+    2,
   ]);
   assert.equal(state.logRows[0][6], "성공");
 });
@@ -128,6 +130,7 @@ test("processSubmission_ preserves unset score separately from zero", () => {
   assert.equal(state.rawRows[0][10], 0);
   assert.equal(state.rawRows[0][11], "");
   assert.equal(state.rawRows[0][12], "미설정");
+  assert.equal(state.rawRows[0][13], "");
 });
 
 test("processSubmission_ stores formula-like text as literal text", () => {

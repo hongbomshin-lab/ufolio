@@ -115,7 +115,7 @@ function sys_buildIntegrationAdmin_(spreadsheet, master) {
   sys_prepareDataSheet_(sys_getOrCreateSheet_(spreadsheet, "현황시트연결"), CASE_CONNECTION_HEADERS, 15);
   sys_prepareDataSheet_(sys_getOrCreateSheet_(spreadsheet, "항목매핑"), CASE_MAPPING_HEADERS, 13);
   sys_prepareDataSheet_(sys_getOrCreateSheet_(spreadsheet, "현황최신"), CASE_SNAPSHOT_HEADERS, 18);
-  sys_prepareDataSheet_(sys_getOrCreateSheet_(spreadsheet, "유폴리오최신"), RAW_HEADERS, 13);
+  sys_prepareDataSheet_(sys_getOrCreateSheet_(spreadsheet, "유폴리오최신"), RAW_HEADERS, 14);
   sys_prepareDataSheet_(sys_getOrCreateSheet_(spreadsheet, "비교결과"), CASE_COMPARISON_HEADERS, 13);
   sys_prepareDataSheet_(sys_getOrCreateSheet_(spreadsheet, "미매핑항목"), CASE_UNMAPPED_HEADERS, 7);
   sys_prepareDataSheet_(sys_getOrCreateSheet_(spreadsheet, "연결진단"), CASE_DIAGNOSTIC_HEADERS, 5);
