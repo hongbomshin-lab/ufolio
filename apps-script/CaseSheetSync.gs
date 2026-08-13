@@ -110,6 +110,12 @@ function case_refreshAll_(services) {
   });
 
   var snapshotRows = previous.map(case_clone_);
+  // 이전 스냅샷을 유지하는(원본 실패 등) 행에도 현재 측정값설정을 다시 적용한다.
+  var measurementByMapping = {};
+  mappings.forEach(function (mapping) { measurementByMapping[mapping.mappingKey] = mapping.measurement; });
+  snapshotRows.forEach(function (row) {
+    if (measurementByMapping[row.mappingKey]) row.measurement = measurementByMapping[row.mappingKey];
+  });
   var diagnostics = [];
   var connectionResults = [];
 
@@ -179,6 +185,7 @@ function case_refreshAll_(services) {
         var stale = case_clone_(row);
         stale.stale = true;
         stale.status = "원본노후";
+        if (measurementByMapping[stale.mappingKey]) stale.measurement = measurementByMapping[stale.mappingKey];
         return stale;
       });
       snapshotRows = snapshotRows.filter(function (row) { return row.sourceKey !== connection.sourceKey; }).concat(retained);
@@ -447,6 +454,12 @@ function refreshIntegratedData() {
   } finally {
     lock.releaseLock();
   }
+}
+
+// 측정값설정 시트를 바꾼 뒤 실행: 전체 동기화로 비교결과·대시보드에 반영한다.
+function applyMeasurementSettings() {
+  refreshIntegratedData();
+  SpreadsheetApp.getActiveSpreadsheet().toast("측정값설정을 비교결과·대시보드에 반영했습니다.");
 }
 
 function case_updateConnectionStatuses_(spreadsheet, results) {

@@ -25,15 +25,11 @@ var SYS_HIDDEN_SHEETS = [
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("유폴리오 통합관리")
-    .addItem("현황시트 연결 검사", "validateCaseConnections")
     .addItem("지금 전체 동기화", "refreshIntegratedData")
+    .addItem("측정값 변경 적용", "applyMeasurementSettings")
     .addSeparator()
     .addItem("매일 새벽 3시 동기화 켜기", "installDailyRefreshTrigger")
     .addItem("자동 동기화 끄기", "removeRefreshTriggers")
-    .addSeparator()
-    .addItem("화면 구성 새로 적용", "applyUnifiedWorkbookLayout")
-    .addItem("기본 연결·매핑 누락분 추가", "seedIntegrationDefaults")
-    .addItem("② 관리자 파일 가져오기 (1회)", "migrateAdminWorkbookIntoSite")
     .addToUi();
 }
 
@@ -41,6 +37,7 @@ function onOpen() {
 // 기존 데이터(연결 URL, 매핑, RAW, 측정값 선택)는 지우지 않는다.
 function applyUnifiedWorkbookLayout() {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  spreadsheet.setSpreadsheetTimeZone("Asia/Seoul");
   setupSheets();
   sys_ensureIntegrationSheets_(spreadsheet);
   sys_seedRows_(spreadsheet.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS, case_defaultConnections_(), 0);

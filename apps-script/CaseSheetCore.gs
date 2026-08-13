@@ -172,6 +172,7 @@ function case_aggregateUfolio_(mapping, latestByKey, studentId) {
   var numbers = [];
   var targetFound = false;
   var pendingSum = 0;
+  var pendingSeen = false;
   targetLines.forEach(function (line) {
     var target = line.split("|").map(function (part) { return part.trim(); });
     if (target.length !== 4 || target.some(function (part) { return !part; })) {
@@ -181,12 +182,16 @@ function case_aggregateUfolio_(mapping, latestByKey, studentId) {
     if (!record) return;
     targetFound = true;
     var pendingValue = case_recordPending_(record);
-    if (!case_isBlank_(pendingValue)) pendingSum += case_numericValue_(pendingValue);
+    if (!case_isBlank_(pendingValue)) {
+      pendingSeen = true;
+      pendingSum += case_numericValue_(pendingValue);
+    }
     var value = case_recordMetric_(record, mapping.measurement);
     if (case_isBlank_(value)) return;
     numbers.push(case_numericValue_(value));
   });
-  var pending = targetFound ? pendingSum : "";
+  // 구버전 북마클릿 제출분은 승인대기 값이 비어 있으므로 0 대신 빈칸으로 구분한다.
+  var pending = pendingSeen ? pendingSum : "";
   if (numbers.length === 0) return { found: false, targetFound: targetFound, value: "", pending: pending };
   var aggregation = String(mapping && mapping.aggregation || "SUM").trim().toUpperCase();
   if (aggregation === "SUM") return { found: true, targetFound: true, value: numbers.reduce(function (sum, value) { return sum + value; }, 0), pending: pending };

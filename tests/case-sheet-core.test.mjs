@@ -80,6 +80,19 @@ test("U-FOLIO aggregation selects a metric and combines mapped targets", () => {
   assert.equal(missing.value, "");
 });
 
+test("U-FOLIO aggregation leaves pending blank when no record carries a pending count", () => {
+  const core = loadCore();
+  const target = "3학년 치의학 임상실습 2|구강내과|증례별 임상참여|Charting";
+  const latest = {
+    [`2024-00001|${target}`]: { approvedCount: 1, patientCount: 2, score: 3 },
+  };
+  const mapping = { ufolioTargets: target, measurement: "승인수", aggregation: "SUM" };
+  assert.equal(core.case_aggregateUfolio_(mapping, latest, "2024-00001").pending, "");
+
+  latest[`2024-00001|${target}`].pendingCount = 0;
+  assert.equal(core.case_aggregateUfolio_(mapping, latest, "2024-00001").pending, 0);
+});
+
 test("U-FOLIO aggregation distinguishes a missing target from a blank selected metric", () => {
   const core = loadCore();
   const target = "3학년 치의학 임상실습 2|구강내과|증례별 임상참여|Charting";

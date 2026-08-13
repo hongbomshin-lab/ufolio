@@ -94,7 +94,7 @@ test("system setup exposes only the unified single-workbook workflow", () => {
   for (const required of [
     "applyUnifiedWorkbookLayout",
     "migrateAdminWorkbookIntoSite",
-    "validateCaseConnections",
+    "applyMeasurementSettings",
     "refreshIntegratedData",
     "installDailyRefreshTrigger",
     "removeRefreshTriggers",

@@ -96,6 +96,54 @@ test("refresh isolates source failures and preserves failed source snapshots as 
   assert.match(result.diagnostics.find((row) => row.sourceKey === "FAIL").detail, /권한 없음/);
 });
 
+test("stale snapshot rows follow the current measurement settings", () => {
+  const sync = loadSync();
+  const target = "3학년 치의학 임상실습 2|치주과|증례별 임상참여|Implant Assist";
+  const previousFailed = {
+    syncedAt: "2026-08-05T03:00:00.000Z",
+    sourceKey: "FAIL",
+    mappingKey: "FAIL_COUNT",
+    attendanceNo: 1,
+    studentId: "2024-00001",
+    name: "학생일",
+    department: "치주과",
+    label: "이전 집계",
+    completedValue: 2,
+    plannedValue: "",
+    sourceValue: 2,
+    reviewStatus: "승인",
+    measurement: "승인수",
+    ufolioTargets: target,
+    aggregation: "SUM",
+    priority: 70,
+    status: "일치",
+    stale: false,
+  };
+  const services = {
+    now: () => new Date("2026-08-06T03:00:00.000Z"),
+    getConnections: () => [
+      { sourceKey: "FAIL", active: "Y", url: "sheet-fail", attendanceColumn: "A", nameColumn: "B", priority: 70 },
+    ],
+    getMappings: () => [
+      mapping({ mappingKey: "FAIL_COUNT", sourceKey: "FAIL", label: "이전 집계", ufolioTargets: target, priority: 70 }),
+    ],
+    getMeasurementSettings: () => ({ [target]: "환자수" }),
+    getRoster: () => [{ attendanceNo: 1, studentId: "2024-00001", name: "학생일" }],
+    getPreviousSnapshot: () => [previousFailed],
+    getLatestUfolio: () => ({
+      [`2024-00001|${target}`]: { approvedCount: 9, patientCount: 2, score: "", pendingCount: "" },
+    }),
+    readSource: () => {
+      throw new Error("권한 없음");
+    },
+  };
+
+  const result = sync.case_refreshAll_(services);
+  const row = result.comparisonRows.find((entry) => entry.mappingKey === "FAIL_COUNT");
+  assert.equal(row.measurement, "환자수");
+  assert.equal(row.ufolioValue, 2);
+});
+
 test("refresh excludes name mismatches and keeps unapproved mappings out of the comparison", () => {
   const sync = loadSync();
   const services = {
@@ -171,7 +219,8 @@ test("refresh comparisons cover equal, pending, source-missing, and unauthentica
   assert.equal(byAttendance[1].ufolioDisplay, 3);
   assert.equal(byAttendance[4].ufolioDisplay, "미인증");
   assert.equal(byAttendance[1].pendingWait, 2);
-  assert.equal(byAttendance[2].pendingWait, 0);
+  // 승인대기 값이 아예 없는 제출(구버전 북마클릿)은 0이 아니라 빈칸으로 남긴다.
+  assert.equal(byAttendance[2].pendingWait, "");
   assert.equal(byAttendance[4].pendingWait, "");
   assert.equal(byAttendance[1].latestAuthAt.toISOString(), "2026-08-05T22:10:00.000Z");
   assert.equal(byAttendance[4].latestAuthAt, "");
