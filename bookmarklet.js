@@ -34,6 +34,7 @@ export function createSubmission({ identity, practices, items, now, uuid }) {
       menuName: item.menuName,
       itemName: item.itemName,
       approvedCount: normalizeNullableNumber(item.approvedCount),
+      pendingCount: normalizeNullableNumber(item.pendingCount),
       patientCount: normalizeNullableNumber(item.patientCount),
       score: normalizeNullableNumber(item.score),
       scoreRaw: item.scoreRaw == null ? "" : String(item.scoreRaw),
@@ -62,6 +63,7 @@ function bookmarkletRuntime(webAppUrl) {
       const number = Number(text);
       return Number.isFinite(number) ? number : null;
     };
+    const PRACTICE_RE = /임상실습\s*2/;
     const parseIdentity = (text) => {
       const regex = /([가-힣A-Za-z][가-힣A-Za-z\s·]{0,39}?)\s*\(\s*(\d{4}-\d{5})\s*\)/g;
       const matches = [...String(text ?? "").matchAll(regex)];
@@ -172,29 +174,23 @@ function bookmarkletRuntime(webAppUrl) {
         return;
       }
 
-      const practices = [...new Set(courses.map((course) => course.curr_name).filter(Boolean))];
-      const choices = practices
-        .map(
-          (practice) =>
-            `<label style="display:block;margin:5px 0"><input class="ufc-practice" type="checkbox" value="${escapeHtml(practice)}" checked> ${escapeHtml(practice)}</label>`,
-        )
-        .join("");
+      const selectedCourses = courses.filter((course) =>
+        PRACTICE_RE.test(String(course.curr_name ?? "")),
+      );
+      const selected = [
+        ...new Set(selectedCourses.map((course) => course.curr_name).filter(Boolean)),
+      ];
+      if (selected.length === 0) {
+        show(
+          "<strong>임상실습 2 과목을 찾지 못했습니다.</strong><br>임상실습요약표에서 임상실습 2가 보이는 상태인지 확인하세요.",
+        );
+        return;
+      }
       show(
-        `<p style="margin:0 0 8px">감지된 사용자: <strong>${escapeHtml(identity.name)} (${escapeHtml(identity.studentId)})</strong></p><p style="margin:8px 0 4px;font-weight:700">가져올 실습차수</p>${choices}<button id="ufc-start" type="button" style="margin-top:12px;padding:9px 14px;border:0;border-radius:8px;background:#155eef;color:#fff;font-weight:700;cursor:pointer">추출하고 전송</button>`,
+        `<p style="margin:0 0 8px">감지된 사용자: <strong>${escapeHtml(identity.name)} (${escapeHtml(identity.studentId)})</strong></p><p style="margin:8px 0 4px">가져올 실습차수: <strong>${escapeHtml(selected.join(", "))}</strong> (${selectedCourses.length}개 과)</p><button id="ufc-start" type="button" style="margin-top:12px;padding:9px 14px;border:0;border-radius:8px;background:#155eef;color:#fff;font-weight:700;cursor:pointer">추출하고 전송</button>`,
       );
 
       panel.querySelector("#ufc-start").onclick = async () => {
-        const selected = [...panel.querySelectorAll(".ufc-practice:checked")].map(
-          (element) => element.value,
-        );
-        if (selected.length === 0) {
-          alert("실습차수를 하나 이상 선택하세요.");
-          return;
-        }
-
-        const selectedCourses = courses.filter((course) =>
-          selected.includes(course.curr_name),
-        );
         const items = [];
         const failures = [];
         for (let index = 0; index < selectedCourses.length; index += 1) {
@@ -220,6 +216,8 @@ function bookmarkletRuntime(webAppUrl) {
                 menuName: String(item.menu_name ?? ""),
                 itemName: String(item.pc_name ?? ""),
                 approvedCount: nullableNumber(item.app_cnt),
+                // 유폴리오 요약표의 "제출 건수" = 승인 전 대기 건수 (tot_cnt = app_cnt + submit_cnt)
+                pendingCount: nullableNumber(item.submit_cnt),
                 patientCount: nullableNumber(item.sum_patient_cnt),
                 score: scoreUnset ? null : nullableNumber(item.cal_score),
                 scoreRaw: scoreUnset ? "미설정" : String(item.cal_score ?? ""),
@@ -255,10 +253,10 @@ function bookmarkletRuntime(webAppUrl) {
           if (rows.length === 0) {
             return '<p style="color:#667085">점수가 있는 항목이 없습니다. 전체 항목 보기를 선택하세요.</p>';
           }
-          return `<div style="overflow:auto;max-height:42vh"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left">과</th><th style="text-align:left">항목</th><th>승인</th><th>환자</th><th>점수</th></tr></thead><tbody>${rows
+          return `<div style="overflow:auto;max-height:42vh"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left">과</th><th style="text-align:left">항목</th><th>승인</th><th>승인대기</th><th>환자</th><th>점수</th></tr></thead><tbody>${rows
             .map(
               (item) =>
-                `<tr><td style="border-top:1px solid #e4e7ec;padding:4px">${escapeHtml(item.departmentName)}</td><td style="border-top:1px solid #e4e7ec;padding:4px">${escapeHtml(item.itemName)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.approvedCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.patientCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.scoreRaw)}</td></tr>`,
+                `<tr><td style="border-top:1px solid #e4e7ec;padding:4px">${escapeHtml(item.departmentName)}</td><td style="border-top:1px solid #e4e7ec;padding:4px">${escapeHtml(item.itemName)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.approvedCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.pendingCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.patientCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.scoreRaw)}</td></tr>`,
             )
             .join("")}</tbody></table></div>`;
         };
@@ -282,8 +280,10 @@ function bookmarkletRuntime(webAppUrl) {
           }
         };
 
+        const pending = items.reduce((sum, item) => sum + (item.pendingCount || 0), 0);
+        const pendingNote = `<p style="margin:6px 0">승인대기(제출 건수) 합계: <strong>${pending}</strong>건</p>`;
         show(
-          `<div id="ufc-status" style="padding:9px;border-radius:8px;background:#eff4ff">전송 준비 중…</div><p><strong>${escapeHtml(identity.name)} (${escapeHtml(identity.studentId)})</strong> · 총 ${items.length}개 항목 · 점수 있는 항목 ${scored.length}개</p><label><input id="ufc-all" type="checkbox"> 0·미설정 포함 전체 항목 보기</label><div id="ufc-table" style="margin-top:8px">${renderRows(false)}</div><button id="ufc-resend" type="button" style="margin-top:10px;padding:7px 12px;border:1px solid #155eef;border-radius:7px;background:#fff;color:#155eef;cursor:pointer">다시 전송</button>`,
+          `<div id="ufc-status" style="padding:9px;border-radius:8px;background:#eff4ff">전송 준비 중…</div><p><strong>${escapeHtml(identity.name)} (${escapeHtml(identity.studentId)})</strong> · 총 ${items.length}개 항목 · 점수 있는 항목 ${scored.length}개</p>${pendingNote}<label><input id="ufc-all" type="checkbox"> 0·미설정 포함 전체 항목 보기</label><div id="ufc-table" style="margin-top:8px">${renderRows(false)}</div><button id="ufc-resend" type="button" style="margin-top:10px;padding:7px 12px;border:1px solid #155eef;border-radius:7px;background:#fff;color:#155eef;cursor:pointer">다시 전송</button>`,
         );
         panel.querySelector("#ufc-all").onchange = (event) => {
           panel.querySelector("#ufc-table").innerHTML = renderRows(event.target.checked);

@@ -18,6 +18,7 @@ var RAW_HEADERS = [
   "환자 수",
   "점수",
   "점수 원문",
+  "승인대기 수",
 ];
 var ROSTER_HEADERS = ["출석번호", "학번", "이름"];
 var MASTER_HEADERS = [
@@ -211,6 +212,7 @@ function processSubmission_(payload, services) {
       item.patientCount == null ? "" : item.patientCount,
       item.score == null ? "" : item.score,
       safeCellText_(item.scoreRaw),
+      item.pendingCount == null ? "" : item.pendingCount,
     ];
   });
 
@@ -282,6 +284,7 @@ function validatePayload_(payload) {
       menuName: limitedText_(item.menuName, "메뉴/구분", 200),
       itemName: requiredText_(item.itemName, "항목", 500),
       approvedCount: nullableFiniteNumber_(item.approvedCount, "승인 수"),
+      pendingCount: nullableFiniteNumber_(item.pendingCount, "승인대기 수"),
       patientCount: nullableFiniteNumber_(item.patientCount, "환자 수"),
       score: nullableFiniteNumber_(item.score, "점수"),
       scoreRaw: limitedText_(item.scoreRaw, "점수 원문", 100),
