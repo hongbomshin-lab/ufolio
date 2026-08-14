@@ -3,7 +3,8 @@ var DASH_CHART_SHEET = "차트데이터";
 var DASH_HEADER_ROW = 12;
 var DASH_NAME_ROW = 13;
 var DASH_FIRST_DATA_ROW = 14;
-var DASH_FIXED_COLUMNS = 5;
+var DASH_FIXED_COLUMNS = 6;
+var DASH_CHECK_COLUMN = 6;
 var DASH_CHART_MAX_ROWS = 30;
 var DASH_MAX_DISTINCT_BARS = 25;
 var DASH_COLORS = {
@@ -118,24 +119,25 @@ function dash_writeDashboard_(spreadsheet, matrix) {
   if (sheet.getMaxColumns() < columnCount) sheet.insertColumnsAfter(sheet.getMaxColumns(), columnCount - sheet.getMaxColumns());
   if (sheet.getMaxRows() < rowCount + 5) sheet.insertRowsAfter(sheet.getMaxRows(), rowCount + 5 - sheet.getMaxRows());
   sheet.clear();
+  sheet.getRange(1, DASH_CHECK_COLUMN, sheet.getMaxRows(), 1).clearDataValidations();
 
   sheet.getRange(1, 1).setValue("유폴리오 대시보드").setFontSize(15).setFontWeight("bold").setFontColor(DASH_COLORS.navy);
-  sheet.getRange(2, 1).setValue("아래 표에서 항목 행을 클릭하면 오른쪽 위 그래프에 그 항목의 분포가 표시됩니다. 회색 학생은 아직 유폴리오를 한 번도 보내지 않았습니다.")
+  sheet.getRange(2, 1).setValue("아래 표에서 항목의 [그래프] 체크박스를 누르면 오른쪽 위 그래프에 그 항목의 분포가 표시됩니다. 회색 학생은 아직 유폴리오를 한 번도 보내지 않았습니다.")
     .setFontColor("#666666");
 
   sheet.getRange(3, 1, 5, 1).setValues([["선택한 항목"], ["측정값"], ["평균"], ["인증 보낸 인원"], ["안 보낸 인원"]])
     .setFontWeight("bold").setBackground(DASH_COLORS.paleBlue);
   sheet.getRange(3, 2, 5, 1).setBackground(DASH_COLORS.paleYellow);
-  sheet.getRange(3, 2).setValue("항목 행을 클릭하세요");
+  sheet.getRange(3, 2).setValue("항목의 그래프 체크박스를 누르세요");
   sheet.setColumnWidth(1, 150);
   sheet.setColumnWidth(2, 190);
   sheet.setColumnWidth(3, 280);
   sheet.setColumnWidth(4, 66);
   sheet.setColumnWidth(5, 60);
 
-  var numberHeader = ["과", "메뉴/구분", "항목", "측정값", "평균"];
-  var nameHeader = ["", "", "", "", "이름 →"];
-  var numberBackgrounds = [DASH_COLORS.blue, DASH_COLORS.blue, DASH_COLORS.blue, DASH_COLORS.blue, DASH_COLORS.blue];
+  var numberHeader = ["과", "메뉴/구분", "항목", "측정값", "평균", "그래프"];
+  var nameHeader = ["", "", "", "", "", "이름 →"];
+  var numberBackgrounds = [DASH_COLORS.blue, DASH_COLORS.blue, DASH_COLORS.blue, DASH_COLORS.blue, DASH_COLORS.blue, DASH_COLORS.blue];
   matrix.students.forEach(function (student) {
     numberHeader.push(student.attendanceNo);
     nameHeader.push(student.name);
@@ -154,15 +156,19 @@ function dash_writeDashboard_(spreadsheet, matrix) {
 
   if (matrix.rows.length > 0) {
     var body = matrix.rows.map(function (row) {
-      var line = [row.department, row.menu, row.item, row.measurement, row.average].concat(row.values);
+      var line = [row.department, row.menu, row.item, row.measurement, row.average, false].concat(row.values);
       while (line.length < columnCount) line.push("");
       return line;
     });
     sheet.getRange(DASH_FIRST_DATA_ROW, 1, body.length, columnCount).setValues(body);
-    sheet.getRange(DASH_FIRST_DATA_ROW, 5, body.length, columnCount - 4).setNumberFormat("0.##");
-    sheet.getRange(DASH_FIRST_DATA_ROW, 5, body.length, 1).setBackground(DASH_COLORS.paleYellow).setFontWeight("bold");
+    sheet.getRange(DASH_FIRST_DATA_ROW, 5, body.length, 1).setNumberFormat("0.##").setBackground(DASH_COLORS.paleYellow).setFontWeight("bold");
+    sheet.getRange(DASH_FIRST_DATA_ROW, DASH_CHECK_COLUMN, body.length, 1).insertCheckboxes().setHorizontalAlignment("center");
+    if (columnCount > DASH_FIXED_COLUMNS) {
+      sheet.getRange(DASH_FIRST_DATA_ROW, DASH_FIXED_COLUMNS + 1, body.length, columnCount - DASH_FIXED_COLUMNS).setNumberFormat("0.##");
+    }
   }
-  for (var column = 6; column <= columnCount; column += 1) sheet.setColumnWidth(column, 46);
+  sheet.setColumnWidth(DASH_CHECK_COLUMN, 52);
+  for (var column = DASH_FIXED_COLUMNS + 1; column <= columnCount; column += 1) sheet.setColumnWidth(column, 46);
   sheet.setFrozenRows(DASH_NAME_ROW);
   sheet.setFrozenColumns(DASH_FIXED_COLUMNS);
   sheet.setHiddenGridlines(true);
@@ -179,17 +185,38 @@ function dash_resetChartData_(spreadsheet) {
 }
 
 function dash_ensureChart_(sheet, chartData) {
-  if (sheet.getCharts().length > 0) return;
+  var existing = sheet.getCharts()[0];
+  if (existing) {
+    // 위치가 옛날(왼쪽 아래)인 기존 차트도 헤더 위 오른쪽(F2)으로 끌어올린다.
+    sheet.updateChart(existing.modify().setPosition(2, DASH_CHECK_COLUMN, 0, 0).build());
+    return;
+  }
   var chart = sheet.newChart()
     .setChartType(Charts.ChartType.COLUMN)
     .addRange(chartData.getRange(1, 1, DASH_CHART_MAX_ROWS + 1, 2))
-    .setPosition(2, 4, 10, 0)
+    .setPosition(2, DASH_CHECK_COLUMN, 0, 0)
     .setOption("title", "선택한 항목의 분포 (값별 인원)")
     .setOption("legend", { position: "none" })
     .setOption("width", 620)
     .setOption("height", 215)
     .build();
   sheet.insertChart(chart);
+}
+
+// 그래프 체크박스를 누르면 실행되는 단순 트리거. onSelectionChange 가 간헐적으로 안 먹어서 만든 확실한 경로.
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var range = e.range;
+    var sheet = range.getSheet();
+    if (sheet.getName() !== DASH_SHEET) return;
+    if (range.getColumn() !== DASH_CHECK_COLUMN || range.getRow() < DASH_FIRST_DATA_ROW) return;
+    if (range.getValue() !== true) return;
+    dash_selectItem_(sheet, range.getRow());
+    range.setValue(false);
+  } catch (error) {
+    // 편집 이벤트는 실패해도 조용히 넘어간다.
+  }
 }
 
 // 대시보드에서 항목 행을 클릭하면 실행되는 단순 트리거.
