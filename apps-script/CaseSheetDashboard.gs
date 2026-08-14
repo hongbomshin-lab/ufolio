@@ -184,21 +184,28 @@ function dash_resetChartData_(spreadsheet) {
   return chartData;
 }
 
+// 차트 앵커 = G1. 고정 영역(1~13행) 안에 있어야 스크롤해도 차트가 화면에 남는다.
+// 높이 230px ≈ 11행이라 12~13행 헤더는 가리지 않는다.
+var DASH_CHART_ANCHOR_COLUMN = 7;
+
 function dash_ensureChart_(sheet, chartData) {
-  var existing = sheet.getCharts()[0];
+  var existing = null;
+  sheet.getCharts().forEach(function (chart) {
+    if (!existing && chart.getRanges().length > 0) { existing = chart; return; }
+    sheet.removeChart(chart); // 데이터 범위 없는 빈 차트·중복 차트 정리
+  });
   if (existing) {
-    // 위치가 옛날(왼쪽 아래)인 기존 차트도 헤더 위 오른쪽(F2)으로 끌어올린다.
-    sheet.updateChart(existing.modify().setPosition(2, DASH_CHECK_COLUMN, 0, 0).build());
+    sheet.updateChart(existing.modify().setPosition(1, DASH_CHART_ANCHOR_COLUMN, 0, 0).build());
     return;
   }
   var chart = sheet.newChart()
     .setChartType(Charts.ChartType.COLUMN)
     .addRange(chartData.getRange(1, 1, DASH_CHART_MAX_ROWS + 1, 2))
-    .setPosition(2, DASH_CHECK_COLUMN, 0, 0)
-    .setOption("title", "선택한 항목의 분포 (값별 인원)")
+    .setPosition(1, DASH_CHART_ANCHOR_COLUMN, 0, 0)
+    .setOption("title", "항목의 [그래프] 체크박스를 누르세요")
     .setOption("legend", { position: "none" })
     .setOption("width", 620)
-    .setOption("height", 215)
+    .setOption("height", 230)
     .build();
   sheet.insertChart(chart);
 }
@@ -252,4 +259,8 @@ function dash_selectItem_(sheet, row) {
   var chartData = dash_resetChartData_(spreadsheet);
   var distribution = dash_distribution_(studentValues);
   if (distribution.length > 0) chartData.getRange(2, 1, distribution.length, 2).setValues(distribution);
+  var chart = sheet.getCharts()[0];
+  if (chart) {
+    sheet.updateChart(chart.modify().setOption("title", rowValues[0] + "-" + rowValues[2] + " (" + rowValues[3] + ")").build());
+  }
 }
