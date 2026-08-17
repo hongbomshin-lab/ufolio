@@ -147,6 +147,21 @@ function createSheetServices_() {
     appendRawRows: function (rows) {
       raw.getRange(raw.getLastRow() + 1, 1, rows.length, RAW_HEADERS.length).setValues(rows);
     },
+    // 같은 학생이 같은 실습차수를 다시 보내면 이전 제출 행을 지운다 (RAW에는 항상 최신 제출만 남는다).
+    removeRawRows: function (studentId, practiceNames) {
+      var lastRow = raw.getLastRow();
+      if (lastRow < 2) return;
+      var values = raw.getRange(2, 1, lastRow - 1, RAW_HEADERS.length).getValues();
+      var wanted = {};
+      practiceNames.forEach(function (name) { wanted[rawKeyText_(name)] = true; });
+      var id = rawKeyText_(studentId);
+      var kept = values.filter(function (row) {
+        return rawKeyText_(row[3]) !== id || !wanted[rawKeyText_(row[5])];
+      });
+      if (kept.length === values.length) return;
+      raw.getRange(2, 1, lastRow - 1, RAW_HEADERS.length).clearContent();
+      if (kept.length > 0) raw.getRange(2, 1, kept.length, RAW_HEADERS.length).setValues(kept);
+    },
     appendLogRow: function (row) {
       log.getRange(log.getLastRow() + 1, 1, 1, LOG_HEADERS.length).setValues([row]);
     },
@@ -216,6 +231,8 @@ function processSubmission_(payload, services) {
     ];
   });
 
+  // 제출은 실습차수 단위 전체 스냅샷이므로, 이번 제출에 포함된 실습차수의 이전 행을 지우고 최신만 남긴다.
+  services.removeRawRows(clean.student.studentId, clean.practices);
   services.appendRawRows(rawRows);
   services.appendLogRow([
     receivedAt,
@@ -339,4 +356,51 @@ function nullableFiniteNumber_(value, label) {
 function safeCellText_(value) {
   var text = String(value == null ? "" : value);
   return /^[=+\-@]/.test(text) ? "'" + text : text;
+}
+
+function rawKeyText_(value) {
+  return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+}
+
+function rawGroupKey_(row) {
+  return rawKeyText_(row[3]) + "|" + rawKeyText_(row[5]); // 학번|실습차수
+}
+
+// 학생×실습차수별로 가장 최근 수신시각의 제출만 남긴다.
+// (제출은 실습차수 단위 전체 스냅샷이므로 최신 제출이 그 차수의 완전한 현재 상태다)
+function compactRawRows_(values) {
+  var latestAt = {};
+  values.forEach(function (row) {
+    var key = rawGroupKey_(row);
+    var at = new Date(row[0]).getTime();
+    if (!isFinite(at)) at = 0;
+    if (latestAt[key] == null || at > latestAt[key]) latestAt[key] = at;
+  });
+  return values.filter(function (row) {
+    var at = new Date(row[0]).getTime();
+    if (!isFinite(at)) at = 0;
+    return at === latestAt[rawGroupKey_(row)];
+  });
+}
+
+// 이미 쌓여 있는 RAW의 과거 제출분을 1회 정리한다. (이후 제출은 doPost가 자동으로 최신만 유지)
+function compactRawSheet() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var raw = spreadsheet.getSheetByName(RAW_SHEET);
+    if (!raw || raw.getLastRow() < 2) return;
+    var values = raw.getRange(2, 1, raw.getLastRow() - 1, RAW_HEADERS.length).getValues();
+    var kept = compactRawRows_(values);
+    if (kept.length === values.length) {
+      spreadsheet.toast("정리할 과거 제출이 없습니다. (RAW " + values.length + "행 전부 최신)");
+      return;
+    }
+    raw.getRange(2, 1, values.length, RAW_HEADERS.length).clearContent();
+    if (kept.length > 0) raw.getRange(2, 1, kept.length, RAW_HEADERS.length).setValues(kept);
+    spreadsheet.toast("RAW " + values.length + "행 중 최신 " + kept.length + "행만 남겼습니다.");
+  } finally {
+    lock.releaseLock();
+  }
 }

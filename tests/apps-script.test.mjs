@@ -38,7 +38,7 @@ function fakeServices(
   rosterRows = [[7, "2024-54321", "테스트학생"]],
   masterRows = [["Y", "3학년 치의학 임상실습 2", "보존과", "증례별 임상참여", "Observation case", "N", "승인수", ""]],
 ) {
-  const state = { rawRows: [], logRows: [] };
+  const state = { rawRows: [], logRows: [], removed: [] };
   return {
     state,
     services: {
@@ -47,6 +47,7 @@ function fakeServices(
       getMasterRows: () => masterRows,
       appendRawRows: (rows) => state.rawRows.push(...rows),
       appendLogRow: (row) => state.logRows.push(row),
+      removeRawRows: (studentId, practices) => state.removed.push([studentId, practices]),
     },
   };
 }
@@ -148,6 +149,32 @@ test("processSubmission_ stores formula-like text as literal text", () => {
     state.rawRows[0][8],
     '\'=IMPORTXML("https://example.com","//x")',
   );
+});
+
+test("processSubmission_ replaces earlier rows of the same student and practice", () => {
+  const receiver = loadReceiver();
+  const { services, state } = fakeServices();
+
+  const result = receiver.processSubmission_(validPayload(), services);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(state.removed, [["2024-54321", ["3학년 치의학 임상실습 2"]]]);
+});
+
+test("compactRawRows_ keeps only the latest submission per student and practice", () => {
+  const receiver = loadReceiver();
+  const row = (at, studentId, practice, item) =>
+    [at, "id", 1, studentId, "학생", practice, "과", "메뉴", item, 1, "", "", "", ""];
+  const kept = receiver.compactRawRows_([
+    row("2026-08-05T10:00:00.000Z", "2024-00001", "실습A", "옛항목"),
+    row("2026-08-06T10:00:00.000Z", "2024-00001", "실습A", "항목1"),
+    row("2026-08-06T10:00:00.000Z", "2024-00001", "실습A", "항목2"),
+    row("2026-08-04T10:00:00.000Z", "2024-00001", "실습B", "항목3"),
+    row("2026-08-05T10:00:00.000Z", "2024-00002", "실습A", "항목1"),
+  ]);
+  // 실습A 최신(8/6) 2행 + 실습B(다른 차수) 1행 + 다른 학생 1행. 8/5의 옛 제출만 사라진다.
+  assert.equal(kept.length, 4);
+  assert.equal(kept.some((r) => r[8] === "옛항목"), false);
 });
 
 test("validatePayload_ rejects malformed and oversized submissions", () => {

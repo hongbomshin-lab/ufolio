@@ -165,11 +165,24 @@ function case_recordPending_(record) {
   return "";
 }
 
+// 승인수·환자수·점수 세 측정값을 전부 집계해 metrics 로 돌려준다.
+// value/found 는 mapping.measurement 로 고른 측정값 기준(비교 로직이 쓰는 값)이다.
 function case_aggregateUfolio_(mapping, latestByKey, studentId) {
+  var measurement = String(mapping && mapping.measurement || "").replace(/\s+/g, "");
+  if (CASE_MEASUREMENT_CHOICES.indexOf(measurement) < 0) {
+    throw new Error("지원하지 않는 U-FOLIO 측정값입니다: " + (mapping && mapping.measurement));
+  }
+  var aggregation = String(mapping && mapping.aggregation || "SUM").trim().toUpperCase();
+  if (["SUM", "MAX", "FIRST"].indexOf(aggregation) < 0) {
+    throw new Error("지원하지 않는 U-FOLIO 집계 방식입니다: " + aggregation);
+  }
+  var emptyMetrics = {};
+  CASE_MEASUREMENT_CHOICES.forEach(function (metric) { emptyMetrics[metric] = ""; });
   var targetText = String(mapping && mapping.ufolioTargets || "").trim();
   var targetLines = targetText ? targetText.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean) : [];
-  if (targetLines.length === 0) return { found: false, targetFound: false, value: "", pending: "" };
-  var numbers = [];
+  if (targetLines.length === 0) return { found: false, targetFound: false, value: "", pending: "", metrics: emptyMetrics };
+  var numbersByMetric = {};
+  CASE_MEASUREMENT_CHOICES.forEach(function (metric) { numbersByMetric[metric] = []; });
   var targetFound = false;
   var pendingSum = 0;
   var pendingSeen = false;
@@ -186,18 +199,23 @@ function case_aggregateUfolio_(mapping, latestByKey, studentId) {
       pendingSeen = true;
       pendingSum += case_numericValue_(pendingValue);
     }
-    var value = case_recordMetric_(record, mapping.measurement);
-    if (case_isBlank_(value)) return;
-    numbers.push(case_numericValue_(value));
+    CASE_MEASUREMENT_CHOICES.forEach(function (metric) {
+      var value = case_recordMetric_(record, metric);
+      if (!case_isBlank_(value)) numbersByMetric[metric].push(case_numericValue_(value));
+    });
   });
   // 구버전 북마클릿 제출분은 승인대기 값이 비어 있으므로 0 대신 빈칸으로 구분한다.
   var pending = pendingSeen ? pendingSum : "";
-  if (numbers.length === 0) return { found: false, targetFound: targetFound, value: "", pending: pending };
-  var aggregation = String(mapping && mapping.aggregation || "SUM").trim().toUpperCase();
-  if (aggregation === "SUM") return { found: true, targetFound: true, value: numbers.reduce(function (sum, value) { return sum + value; }, 0), pending: pending };
-  if (aggregation === "MAX") return { found: true, targetFound: true, value: Math.max.apply(null, numbers), pending: pending };
-  if (aggregation === "FIRST") return { found: true, targetFound: true, value: numbers[0], pending: pending };
-  throw new Error("지원하지 않는 U-FOLIO 집계 방식입니다: " + aggregation);
+  function combine(numbers) {
+    if (numbers.length === 0) return "";
+    if (aggregation === "SUM") return numbers.reduce(function (sum, value) { return sum + value; }, 0);
+    if (aggregation === "MAX") return Math.max.apply(null, numbers);
+    return numbers[0]; // FIRST
+  }
+  var metrics = {};
+  CASE_MEASUREMENT_CHOICES.forEach(function (metric) { metrics[metric] = combine(numbersByMetric[metric]); });
+  var chosen = metrics[measurement];
+  return { found: chosen !== "", targetFound: targetFound, value: chosen, pending: pending, metrics: metrics };
 }
 
 function case_itemKey_(practice, department, menu, item) {

@@ -54,7 +54,7 @@ const rawHeaders = ["수신시각", "전송 ID", "출석번호", "학번", "이�
 const logHeaders = ["수신시각", "전송 ID", "출석번호", "학번", "이름", "항목 수", "상태", "상세 사유"];
 const masterHeaders = ["활성", "실습차수", "과", "메뉴/구분", "항목", "비교사용", "비교기준", "표시명"];
 const snapshotHeaders = ["동기화시각", "소스키", "매핑키", "출석번호", "학번", "이름", "과", "현황표시명", "완료값", "예정값", "인증대상값", "검토상태", "측정값", "U-FOLIO 대상", "집계방식", "우선순위", "상태", "노후"];
-const comparisonHeaders = ["출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "U-FOLIO 값", "사인 대기 횟수", "최신 유폴 인증"];
+const comparisonHeaders = ["출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "제출수", "승인수", "환자수", "점수", "최신 유폴 인증"];
 const measurementHeaders = ["실습차수", "과", "메뉴/구분", "항목", "측정값"];
 const unmappedHeaders = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
 const diagnosticHeaders = ["시각", "소스키", "행", "상태", "상세"];
@@ -214,17 +214,6 @@ function masterRows() {
   return items.map((row) => ["Y", row.practice, row.department, row.menu, row.item, "N", "승인수", `${row.menu} | ${row.item}`]);
 }
 
-function addComparisonRules(range) {
-  const rules = [
-    ['=$H2="미인증"', palette.paleRed, "#991B1B"],
-    ['=AND($H2<>"",$H2<>"미인증",$G2<>$H2)', palette.paleYellow, "#92400E"],
-    ['=AND($H2<>"",$H2<>"미인증",$G2=$H2)', palette.paleGreen, "#166534"],
-  ];
-  for (const [formula, fill, color] of rules) {
-    range.conditionalFormats.addCustom(formula, { fill, font: { color } });
-  }
-}
-
 function buildUnifiedWorkbook() {
   const workbook = Workbook.create();
 
@@ -232,9 +221,9 @@ function buildUnifiedWorkbook() {
   const dashboard = workbook.worksheets.add("대시보드");
   styleTitle(dashboard, "유폴리오 대시보드", "Google Sheets로 변환한 뒤 유폴리오 통합관리 → 화면 구성 새로 적용을 실행하면 항목×학생 매트릭스와 분포 그래프가 이 자리에 생성됩니다.", "H");
 
-  const comparison = addTableSheet(workbook, "비교결과", comparisonHeaders, [], [84, 120, 100, 120, 240, 82, 88, 98, 92, 150]);
+  // 행 색(미인증/불일치/일치)은 Apps Script 동기화가 칠하므로 조건부서식은 넣지 않는다.
+  const comparison = addTableSheet(workbook, "비교결과", comparisonHeaders, [], [84, 120, 100, 120, 240, 82, 88, 74, 74, 74, 74, 150]);
   comparison.freezePanes.freezeColumns(3);
-  addComparisonRules(comparison.getRange("A2:J20000"));
 
   const connectionSheet = addTableSheet(workbook, "현황시트연결", defaults.connectionHeaders, defaults.connections, [110, 58, 125, 220, 390, 160, 92, 82, 92, 92, 82, 130, 160, 110, 420]);
   connectionSheet.getRange(`A2:L${defaults.connections.length + 1}`).format.fill = palette.paleYellow;

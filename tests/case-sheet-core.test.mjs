@@ -70,6 +70,8 @@ test("U-FOLIO aggregation selects a metric and combines mapped targets", () => {
   }, latest, "2024-00001");
   assert.equal(result.found, true);
   assert.equal(result.value, 3);
+  // 선택한 측정값 외 나머지도 metrics 로 함께 집계된다.
+  assert.deepEqual({ ...result.metrics }, { "승인수": 3, "환자수": 5, "점수": 8 });
 
   const missing = core.case_aggregateUfolio_({
     ufolioTargets: "3학년 임상실습|치주과|Observation|Root planing",

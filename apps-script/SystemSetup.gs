@@ -28,6 +28,8 @@ function onOpen() {
     .addItem("지금 전체 동기화", "refreshIntegratedData")
     .addItem("측정값 변경 적용", "applyMeasurementSettings")
     .addSeparator()
+    .addItem("RAW 과거 제출 정리(최신만 남기기)", "compactRawSheet")
+    .addSeparator()
     .addItem("매일 새벽 3시 동기화 켜기", "installDailyRefreshTrigger")
     .addItem("자동 동기화 끄기", "removeRefreshTriggers")
     .addToUi();
@@ -175,7 +177,8 @@ function sys_adminGuideLines_() {
   return [
     "평소에는 대시보드와 비교결과만 확인합니다.",
     "대시보드에서 항목 행을 클릭하면 그 항목의 값 분포 그래프가 표시됩니다.",
-    "비교결과의 U-FOLIO 값이 '미인증'이면 그 학생이 해당 항목 인증을 아직 보내지 않은 것입니다.",
+    "비교결과에는 제출수·승인수·환자수·점수가 모두 표시됩니다. '미인증'(빨강)은 그 학생이 해당 항목 인증을 아직 보내지 않은 것입니다.",
+    "비교결과 행 색: 측정값으로 고른 값이 현황값과 다르면 노랑, 같으면 초록, 미인증이면 빨강입니다.",
     "측정값설정에서 항목별로 승인수/환자수/점수 중 무엇으로 비교·집계할지 고를 수 있습니다. 바꾼 뒤 지금 전체 동기화를 실행하면 반영됩니다.",
     "현황시트연결은 원본 시트 URL이 바뀔 때만 수정합니다. 노란 셀이 관리자 입력 영역입니다.",
     "나머지 시트(RAW, 항목매핑, 연결진단 등)는 시스템 운영용이라 숨겨져 있습니다. 좌측 하단 시트 목록(☰)에서 다시 열 수 있습니다.",
@@ -226,18 +229,13 @@ function sys_applyAdminFormats_(spreadsheet) {
   }
   var comparison = spreadsheet.getSheetByName(CASE_COMPARISON_SHEET);
   if (comparison) {
-    var comparisonRange = comparison.getRange("A2:J20000");
-    comparison.setConditionalFormatRules([
-      SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$H2="미인증"').setBackground(SYS_COLORS.paleRed).setRanges([comparisonRange]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($H2<>"",$H2<>"미인증",$G2<>$H2)').setBackground(SYS_COLORS.paleYellow).setRanges([comparisonRange]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($H2<>"",$H2<>"미인증",$G2=$H2)').setBackground(SYS_COLORS.paleGreen).setRanges([comparisonRange]).build(),
-    ]);
+    // 행 색은 동기화 때 코드가 칠한다(case_paintComparison_). 측정값 열이 동적이라 조건부서식으로는 못 잡는다.
+    comparison.clearConditionalFormatRules();
     comparison.setFrozenColumns(3);
     comparison.setColumnWidth(5, 240);
-    comparison.setColumnWidth(8, 92);
-    comparison.setColumnWidth(9, 92);
-    comparison.setColumnWidth(10, 150);
-    comparison.getRange("J2:J20000").setNumberFormat("yyyy-mm-dd hh:mm");
+    [8, 9, 10, 11].forEach(function (column) { comparison.setColumnWidth(column, 74); });
+    comparison.setColumnWidth(12, 150);
+    comparison.getRange("L2:L20000").setNumberFormat("yyyy-mm-dd hh:mm");
     sys_ensureFilter_(comparison, CASE_COMPARISON_HEADERS.length);
   }
   var diagnostic = spreadsheet.getSheetByName(CASE_DIAGNOSTIC_SHEET);

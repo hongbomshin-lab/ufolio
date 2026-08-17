@@ -14,8 +14,8 @@ var CASE_SNAPSHOT_HEADERS = [
   "우선순위", "상태", "노후",
 ];
 var CASE_COMPARISON_HEADERS = [
-  "출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "U-FOLIO 값",
-  "사인 대기 횟수", "최신 유폴 인증",
+  "출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값",
+  "제출수", "승인수", "환자수", "점수", "최신 유폴 인증",
 ];
 var CASE_MEASUREMENT_HEADERS = ["실습차수", "과", "메뉴/구분", "항목", "측정값"];
 var CASE_UNMAPPED_HEADERS = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
@@ -250,7 +250,13 @@ function case_refreshAll_(services) {
 function case_comparisonRow_(row, aggregated, status, latestAuthAt) {
   var authenticated = !!(aggregated && aggregated.targetFound);
   var ufolioValue = aggregated && aggregated.found ? aggregated.value : "";
+  var metrics = (aggregated && aggregated.metrics) || {};
   return {
+    // 제출수(=승인대기)·승인수·환자수·점수 네 값을 모두 표시. 인증을 아예 안 보낸 학생은 전부 "미인증".
+    submitDisplay: authenticated ? (aggregated ? aggregated.pending : "") : "미인증",
+    approvedDisplay: authenticated ? (metrics["승인수"] == null ? "" : metrics["승인수"]) : "미인증",
+    patientDisplay: authenticated ? (metrics["환자수"] == null ? "" : metrics["환자수"]) : "미인증",
+    scoreDisplay: authenticated ? (metrics["점수"] == null ? "" : metrics["점수"]) : "미인증",
     attendanceNo: row.attendanceNo,
     studentId: row.studentId,
     name: row.name,
@@ -432,10 +438,12 @@ function refreshIntegratedData() {
     var latest = services.getLatestUfolio();
     var latestRows = Object.keys(latest).map(function (key) { return latest[key].raw; }).sort(function (left, right) { return new Date(right[0]).getTime() - new Date(left[0]).getTime(); });
     case_replaceOutput_(spreadsheet.getSheetByName(CASE_UFOLIO_LATEST_SHEET), RAW_HEADERS, latestRows);
-    case_replaceOutput_(spreadsheet.getSheetByName(CASE_COMPARISON_SHEET), CASE_COMPARISON_HEADERS, result.comparisonRows.map(function (row) {
+    var comparisonSheet = spreadsheet.getSheetByName(CASE_COMPARISON_SHEET);
+    case_replaceOutput_(comparisonSheet, CASE_COMPARISON_HEADERS, result.comparisonRows.map(function (row) {
       return [row.attendanceNo, row.studentId, row.name, row.department, row.label, row.measurement, row.sourceValue,
-        row.ufolioDisplay, row.pendingWait, row.latestAuthAt];
+        row.submitDisplay, row.approvedDisplay, row.patientDisplay, row.scoreDisplay, row.latestAuthAt];
     }));
+    case_paintComparison_(comparisonSheet, result.comparisonRows);
     case_replaceOutput_(spreadsheet.getSheetByName(CASE_UNMAPPED_SHEET), CASE_UNMAPPED_HEADERS, result.unmappedRows.map(function (row) {
       return [row.mappingKey, row.sourceKey, row.label, row.reviewStatus, row.certificationExpression, row.ufolioTargets, row.note];
     }));
@@ -454,6 +462,26 @@ function refreshIntegratedData() {
   } finally {
     lock.releaseLock();
   }
+}
+
+// 비교결과 행 색: 미인증=연빨강, 측정값 기준 현황값과 불일치=노랑, 일치=연초록.
+// 측정값 열이 승인수/환자수/점수 중 동적으로 바뀌므로 조건부서식 대신 동기화 때 코드가 칠한다.
+function case_comparisonRowColor_(row) {
+  if (row.ufolioDisplay === "미인증") return "#FCE4D6";
+  if (row.status === "일치") return "#E2F0D9";
+  return "#FFF2CC";
+}
+
+function case_paintComparison_(sheet, rows) {
+  if (!sheet) return;
+  sheet.clearConditionalFormatRules(); // 구버전(G/H 고정열 기준) 조건부서식 제거
+  var width = CASE_COMPARISON_HEADERS.length;
+  sheet.getRange(2, 1, Math.max(1, sheet.getMaxRows() - 1), width).setBackground(null);
+  if (rows.length === 0) return;
+  sheet.getRange(2, 1, rows.length, width).setBackgrounds(rows.map(function (row) {
+    var color = case_comparisonRowColor_(row);
+    return Array.from({ length: width }, function () { return color; });
+  }));
 }
 
 // 측정값설정 시트를 바꾼 뒤 실행: 전체 동기화로 비교결과·대시보드에 반영한다.
