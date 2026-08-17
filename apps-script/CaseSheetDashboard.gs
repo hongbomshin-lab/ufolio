@@ -6,7 +6,11 @@ var DASH_FIRST_DATA_ROW = 14;
 var DASH_FIXED_COLUMNS = 6;
 var DASH_CHECK_COLUMN = 6;
 var DASH_CHART_MAX_ROWS = 30;
-var DASH_MAX_DISTINCT_BARS = 25;
+var DASH_PANEL_LABELS = [
+  "선택한 항목", "측정값", "평균 ± 표준편차", "중앙값 (상위 50% 경계)",
+  "상위 25% 경계 (이상이면 상위 25%)", "하위 25% 경계 (이하면 하위 25%)",
+  "인증 보낸 인원", "안 보낸 인원",
+];
 var DASH_COLORS = {
   navy: "#17365D",
   blue: "#2F75B5",
@@ -60,34 +64,64 @@ function dash_buildMatrix_(items, students, latestByKey, settings, submittedAt) 
   return { students: studentColumns, rows: rows };
 }
 
-// 값별 인원 분포. 서로 다른 값이 25개를 넘으면 10개 등간격 구간으로 묶는다.
-function dash_distribution_(values) {
+// 평균·표준편차·사분위 요약. 값이 하나도 없으면 null.
+function dash_stats_(values) {
   var numbers = [];
   (values || []).forEach(function (value) {
     if (case_isBlank_(value)) return;
     var number = Number(value);
     if (isFinite(number)) numbers.push(number);
   });
-  if (numbers.length === 0) return [];
+  if (numbers.length === 0) return null;
+  numbers.sort(function (left, right) { return left - right; });
+  var mean = numbers.reduce(function (sum, value) { return sum + value; }, 0) / numbers.length;
+  var variance = numbers.reduce(function (sum, value) { return sum + (value - mean) * (value - mean); }, 0) / numbers.length;
+  function quantile(p) {
+    var position = (numbers.length - 1) * p;
+    var low = Math.floor(position);
+    var high = Math.ceil(position);
+    return numbers[low] + (numbers[high] - numbers[low]) * (position - low);
+  }
+  return {
+    numbers: numbers, count: numbers.length, mean: mean, sd: Math.sqrt(variance),
+    median: quantile(0.5), q1: quantile(0.25), q3: quantile(0.75),
+    min: numbers[0], max: numbers[numbers.length - 1],
+  };
+}
+
+function dash_round_(value) {
+  return Math.round(value * 100) / 100;
+}
+
+// 값별 인원 분포. 승인수처럼 소수의 작은 정수 값이면 정확한 값별로,
+// 점수처럼 넓게 퍼진 값이면 보기 좋은 폭(1/2/2.5/5×10^k)의 구간(range)으로 묶어 분포가 한눈에 보이게 한다.
+function dash_distribution_(values) {
+  var stats = dash_stats_(values);
+  if (!stats) return [];
+  var numbers = stats.numbers;
   var counts = {};
   numbers.forEach(function (number) { counts[number] = (counts[number] || 0) + 1; });
   var distinct = Object.keys(counts).map(Number).sort(function (left, right) { return left - right; });
-  if (distinct.length <= DASH_MAX_DISTINCT_BARS) {
+  var smallIntegers = distinct.length <= 6 && stats.max - stats.min <= 10 &&
+    distinct.every(function (value) { return value === Math.round(value); });
+  if (smallIntegers || stats.max === stats.min) {
     return distinct.map(function (value) { return [String(value), counts[value]]; });
   }
-  var min = distinct[0];
-  var max = distinct[distinct.length - 1];
-  var binCount = 10;
-  var width = (max - min) / binCount;
+  // 목표 구간 수 ≈ √n (5~10개), 구간 폭은 1/2/2.5/5×10^k 중 가장 가까운 값으로 올림.
+  var target = Math.max(5, Math.min(10, Math.ceil(Math.sqrt(numbers.length)) + 2));
+  var rawWidth = (stats.max - stats.min) / target;
+  var magnitude = Math.pow(10, Math.floor(Math.log(rawWidth) / Math.LN10));
+  var width = [1, 2, 2.5, 5, 10].map(function (multiplier) { return multiplier * magnitude; })
+    .filter(function (candidate) { return candidate >= rawWidth - 1e-9; })[0] || 10 * magnitude;
+  var start = Math.floor(stats.min / width) * width;
+  var binCount = Math.floor((stats.max - start) / width) + 1;
   var bins = Array.from({ length: binCount }, function () { return 0; });
   numbers.forEach(function (number) {
-    var index = Math.min(binCount - 1, Math.floor((number - min) / width));
-    bins[index] += 1;
+    bins[Math.min(binCount - 1, Math.floor((number - start) / width))] += 1;
   });
   return bins.map(function (count, index) {
-    var from = min + width * index;
-    var to = index === binCount - 1 ? max : min + width * (index + 1);
-    return [Math.round(from * 10) / 10 + "~" + Math.round(to * 10) / 10, count];
+    var from = start + width * index;
+    return [dash_round_(from) + "~" + dash_round_(from + width), count];
   });
 }
 
@@ -125,11 +159,11 @@ function dash_writeDashboard_(spreadsheet, matrix) {
   sheet.getRange(2, 1).setValue("아래 표에서 항목의 [그래프] 체크박스를 누르면 오른쪽 위 그래프에 그 항목의 분포가 표시됩니다. 회색 학생은 아직 유폴리오를 한 번도 보내지 않았습니다.")
     .setFontColor("#666666");
 
-  sheet.getRange(3, 1, 5, 1).setValues([["선택한 항목"], ["측정값"], ["평균"], ["인증 보낸 인원"], ["안 보낸 인원"]])
+  sheet.getRange(3, 1, DASH_PANEL_LABELS.length, 1).setValues(DASH_PANEL_LABELS.map(function (label) { return [label]; }))
     .setFontWeight("bold").setBackground(DASH_COLORS.paleBlue);
-  sheet.getRange(3, 2, 5, 1).setBackground(DASH_COLORS.paleYellow);
+  sheet.getRange(3, 2, DASH_PANEL_LABELS.length, 1).setBackground(DASH_COLORS.paleYellow);
   sheet.getRange(3, 2).setValue("항목의 그래프 체크박스를 누르세요");
-  sheet.setColumnWidth(1, 150);
+  sheet.setColumnWidth(1, 210);
   sheet.setColumnWidth(2, 190);
   sheet.setColumnWidth(3, 280);
   sheet.setColumnWidth(4, 66);
@@ -249,10 +283,14 @@ function dash_selectItem_(sheet, row) {
   var submitted = studentValues.filter(function (value) { return !case_isBlank_(value); }).length;
   var total = sheet.getRange(DASH_HEADER_ROW, DASH_FIXED_COLUMNS + 1, 1, lastColumn - DASH_FIXED_COLUMNS)
     .getValues()[0].filter(function (value) { return !case_isBlank_(value); }).length;
-  sheet.getRange(3, 2, 5, 1).setValues([
+  var stats = dash_stats_(studentValues);
+  sheet.getRange(3, 2, DASH_PANEL_LABELS.length, 1).setValues([
     [rowValues[0] + " · " + rowValues[2]],
     [rowValues[3]],
-    [rowValues[4] === "" ? "" : Math.round(Number(rowValues[4]) * 100) / 100],
+    [stats ? dash_round_(stats.mean) + " ± " + dash_round_(stats.sd) : ""],
+    [stats ? dash_round_(stats.median) : ""],
+    [stats ? dash_round_(stats.q3) : ""],
+    [stats ? dash_round_(stats.q1) : ""],
     [submitted],
     [Math.max(0, total - submitted)],
   ]);
@@ -261,6 +299,8 @@ function dash_selectItem_(sheet, row) {
   if (distribution.length > 0) chartData.getRange(2, 1, distribution.length, 2).setValues(distribution);
   var chart = sheet.getCharts()[0];
   if (chart) {
-    sheet.updateChart(chart.modify().setOption("title", rowValues[0] + "-" + rowValues[2] + " (" + rowValues[3] + ")").build());
+    var title = rowValues[0] + "-" + rowValues[2] + " (" + rowValues[3] + ")";
+    if (stats) title += " · 평균 " + dash_round_(stats.mean) + " · 표준편차 " + dash_round_(stats.sd);
+    sheet.updateChart(chart.modify().setOption("title", title).build());
   }
 }

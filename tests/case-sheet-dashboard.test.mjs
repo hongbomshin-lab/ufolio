@@ -78,11 +78,30 @@ test("distribution counts people per distinct value and skips blanks", () => {
   assert.deepEqual(Array.from(dash.dash_distribution_(["", "", ""])), []);
 });
 
-test("distribution falls back to ten equal-width bins for many distinct values", () => {
+test("distribution groups spread-out values into nice-width ranges", () => {
   const dash = loadDashboard();
+  // 0~59점 60명 → 폭 10짜리 구간 6개
   const values = Array.from({ length: 60 }, (_, index) => index);
   const distribution = dash.dash_distribution_(values);
-  assert.equal(distribution.length, 10);
-  assert.equal(distribution[0][0], "0~5.9");
-  assert.equal(distribution.reduce((sum, [, count]) => sum + count, 0), 60);
+  assert.deepEqual(Array.from(distribution, (row) => Array.from(row)), [
+    ["0~10", 10], ["10~20", 10], ["20~30", 10], ["30~40", 10], ["40~50", 10], ["50~60", 10],
+  ]);
+
+  // 점수처럼 몇 명 안 되고 넓게 퍼진 값도 구간으로 묶인다 (정확한 값별 막대 1개씩 X)
+  const scores = dash.dash_distribution_([42, 76, 139, 149, 207, 327]);
+  assert.deepEqual(Array.from(scores, (row) => Array.from(row)), [
+    ["0~100", 2], ["100~200", 2], ["200~300", 1], ["300~400", 1],
+  ]);
+});
+
+test("stats summarize mean, standard deviation, and quartile boundaries", () => {
+  const dash = loadDashboard();
+  const stats = dash.dash_stats_([4, "", 1, 3, 2]);
+  assert.equal(stats.count, 4);
+  assert.equal(stats.mean, 2.5);
+  assert.equal(Math.round(stats.sd * 1000) / 1000, 1.118);
+  assert.equal(stats.median, 2.5);
+  assert.equal(stats.q1, 1.75);
+  assert.equal(stats.q3, 3.25);
+  assert.equal(dash.dash_stats_(["", ""]), null);
 });
