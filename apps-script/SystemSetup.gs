@@ -233,9 +233,9 @@ function sys_applyAdminFormats_(spreadsheet) {
     comparison.clearConditionalFormatRules();
     comparison.setFrozenColumns(3);
     comparison.setColumnWidth(5, 240);
-    [8, 9, 10, 11].forEach(function (column) { comparison.setColumnWidth(column, 74); });
-    comparison.setColumnWidth(12, 150);
-    comparison.getRange("L2:L20000").setNumberFormat("yyyy-mm-dd hh:mm");
+    [8, 9, 10, 11, 12].forEach(function (column) { comparison.setColumnWidth(column, 74); });
+    comparison.setColumnWidth(13, 150);
+    comparison.getRange("M2:M20000").setNumberFormat("yyyy-mm-dd hh:mm");
     sys_ensureFilter_(comparison, CASE_COMPARISON_HEADERS.length);
   }
   var diagnostic = spreadsheet.getSheetByName(CASE_DIAGNOSTIC_SHEET);

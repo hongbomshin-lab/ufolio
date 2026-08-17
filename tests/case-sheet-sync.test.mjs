@@ -218,16 +218,19 @@ test("refresh comparisons cover equal, pending, source-missing, and unauthentica
 
   assert.equal(byAttendance[1].ufolioDisplay, 3);
   assert.equal(byAttendance[4].ufolioDisplay, "미인증");
-  // 네 측정값이 모두 표시되고, 미인증 학생은 전부 "미인증"으로 나온다.
-  // 제출수는 유폴리오 화면과 같은 총 제출(승인 3 + 승인대기 2).
+  // 측정값이 모두 표시되고, 미인증 학생은 전부 "미인증"으로 나온다.
+  // 제출건수는 유폴리오 화면과 같은 총 제출(승인 3 + 미승인 2), 미승인 = submit_cnt.
   assert.equal(byAttendance[1].submitDisplay, 5);
-  // 승인대기가 빈칸(구버전 북마클릿)이면 승인수만으로 계산한다.
+  // 미승인이 빈칸(구버전 북마클릿)이면 승인수만으로 계산한다.
   assert.equal(byAttendance[2].submitDisplay, 3);
   assert.equal(byAttendance[1].approvedDisplay, 3);
+  assert.equal(byAttendance[1].pendingDisplay, 2);
+  assert.equal(byAttendance[2].pendingDisplay, "");
   assert.equal(byAttendance[1].patientDisplay, "");
   assert.equal(byAttendance[1].scoreDisplay, "");
   assert.equal(byAttendance[4].submitDisplay, "미인증");
   assert.equal(byAttendance[4].approvedDisplay, "미인증");
+  assert.equal(byAttendance[4].pendingDisplay, "미인증");
   assert.equal(byAttendance[4].patientDisplay, "미인증");
   assert.equal(byAttendance[4].scoreDisplay, "미인증");
   assert.equal(byAttendance[1].pendingWait, 2);
@@ -277,10 +280,10 @@ test("latest u-folio rows keep the pending count and per-student submission time
   assert.equal(submissions["2024-00001"].toISOString(), "2026-08-06T10:00:00.000Z");
 });
 
-test("comparison sheet headers expose all four u-folio metrics plus latest auth time", () => {
+test("comparison sheet headers expose all u-folio metrics plus latest auth time", () => {
   const sync = loadSync();
   assert.deepEqual(Array.from(sync.CASE_COMPARISON_HEADERS), [
-    "출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "제출수", "승인수", "환자수", "점수", "최신 유폴 인증",
+    "출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "제출건수", "승인수", "미승인", "환자수", "점수", "최신 유폴 인증",
   ]);
 });
 

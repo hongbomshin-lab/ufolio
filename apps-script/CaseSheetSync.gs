@@ -15,7 +15,7 @@ var CASE_SNAPSHOT_HEADERS = [
 ];
 var CASE_COMPARISON_HEADERS = [
   "출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값",
-  "제출수", "승인수", "환자수", "점수", "최신 유폴 인증",
+  "제출건수", "승인수", "미승인", "환자수", "점수", "최신 유폴 인증",
 ];
 var CASE_MEASUREMENT_HEADERS = ["실습차수", "과", "메뉴/구분", "항목", "측정값"];
 var CASE_UNMAPPED_HEADERS = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
@@ -251,16 +251,17 @@ function case_comparisonRow_(row, aggregated, status, latestAuthAt) {
   var authenticated = !!(aggregated && aggregated.targetFound);
   var ufolioValue = aggregated && aggregated.found ? aggregated.value : "";
   var metrics = (aggregated && aggregated.metrics) || {};
-  // 유폴리오 화면의 "제출 건수" = 승인 + 승인대기 합(tot_cnt). RAW에는 승인대기(submit_cnt)만 있으므로 여기서 합산한다.
+  // 유폴리오 화면의 "제출 건수" = 승인 + 승인대기 합(tot_cnt). RAW에는 미승인(submit_cnt)만 있으므로 여기서 합산한다.
   var approvedMetric = metrics["승인수"];
   var pendingValue = aggregated ? aggregated.pending : "";
   var submitTotal = case_isBlank_(approvedMetric) && case_isBlank_(pendingValue)
     ? ""
     : Number(approvedMetric || 0) + Number(pendingValue || 0);
   return {
-    // 제출수·승인수·환자수·점수 네 값을 모두 표시. 인증을 아예 안 보낸 학생은 전부 "미인증".
+    // 제출건수·승인수·미승인·환자수·점수를 모두 표시. 인증을 아예 안 보낸 학생은 전부 "미인증".
     submitDisplay: authenticated ? submitTotal : "미인증",
     approvedDisplay: authenticated ? (metrics["승인수"] == null ? "" : metrics["승인수"]) : "미인증",
+    pendingDisplay: authenticated ? pendingValue : "미인증", // 미승인 = 제출건수 - 승인수 (submit_cnt)
     patientDisplay: authenticated ? (metrics["환자수"] == null ? "" : metrics["환자수"]) : "미인증",
     scoreDisplay: authenticated ? (metrics["점수"] == null ? "" : metrics["점수"]) : "미인증",
     attendanceNo: row.attendanceNo,
@@ -447,7 +448,7 @@ function refreshIntegratedData() {
     var comparisonSheet = spreadsheet.getSheetByName(CASE_COMPARISON_SHEET);
     case_replaceOutput_(comparisonSheet, CASE_COMPARISON_HEADERS, result.comparisonRows.map(function (row) {
       return [row.attendanceNo, row.studentId, row.name, row.department, row.label, row.measurement, row.sourceValue,
-        row.submitDisplay, row.approvedDisplay, row.patientDisplay, row.scoreDisplay, row.latestAuthAt];
+        row.submitDisplay, row.approvedDisplay, row.pendingDisplay, row.patientDisplay, row.scoreDisplay, row.latestAuthAt];
     }));
     case_paintComparison_(comparisonSheet, result.comparisonRows);
     case_replaceOutput_(spreadsheet.getSheetByName(CASE_UNMAPPED_SHEET), CASE_UNMAPPED_HEADERS, result.unmappedRows.map(function (row) {

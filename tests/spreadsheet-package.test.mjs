@@ -48,7 +48,7 @@ test("unified workbook contains every designed sheet including the measurement s
 });
 
 test("comparison sheet uses the admin-facing columns with all four metrics", () => {
-  assert.match(builder, /"출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "제출수", "승인수", "환자수", "점수", "최신 유폴 인증"/);
+  assert.match(builder, /"출석번호", "학번", "이름", "과", "현황표시명", "측정값", "현황값", "제출건수", "승인수", "미승인", "환자수", "점수", "최신 유폴 인증"/);
   assert.equal(builder.includes("comparison.freezePanes.freezeColumns(3)"), true);
   // 행 색은 Apps Script 동기화가 칠하므로 xlsx에는 조건부서식을 넣지 않는다.
   assert.equal(builder.includes("conditionalFormats.addCustom"), false);
