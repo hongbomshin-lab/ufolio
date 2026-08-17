@@ -476,7 +476,19 @@ function case_paintComparison_(sheet, rows) {
   if (!sheet) return;
   sheet.clearConditionalFormatRules(); // 구버전(G/H 고정열 기준) 조건부서식 제거
   var width = CASE_COMPARISON_HEADERS.length;
-  sheet.getRange(2, 1, Math.max(1, sheet.getMaxRows() - 1), width).setBackground(null);
+  var bodyRows = Math.max(1, sheet.getMaxRows() - 1);
+  // 열이 10 → 12개로 늘면서 구버전 서식이 남는 문제 정리:
+  // 새로 생긴 K·L 머리글도 파란 헤더로 칠하고, 옛 J열(최신 유폴 인증) 날짜서식이 환자수에 묻는 것을 되돌린다.
+  sheet.getRange(1, 1, 1, width).setBackground("#2F75B5").setFontColor("#FFFFFF").setFontWeight("bold")
+    .setHorizontalAlignment("center").setVerticalAlignment("middle").setWrap(true);
+  sheet.getRange(2, 1, bodyRows, width - 1).setNumberFormat("General");
+  sheet.getRange(2, width, bodyRows, 1).setNumberFormat("yyyy-mm-dd hh:mm"); // 최신 유폴 인증
+  var filter = sheet.getFilter();
+  if (filter && filter.getRange().getNumColumns() < width) {
+    filter.remove();
+    sheet.getRange(1, 1, Math.max(2, sheet.getMaxRows()), width).createFilter();
+  }
+  sheet.getRange(2, 1, bodyRows, width).setBackground(null);
   if (rows.length === 0) return;
   sheet.getRange(2, 1, rows.length, width).setBackgrounds(rows.map(function (row) {
     var color = case_comparisonRowColor_(row);
