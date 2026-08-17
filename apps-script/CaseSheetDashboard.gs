@@ -203,7 +203,9 @@ function dash_writeDashboard_(spreadsheet, matrix) {
   }
   sheet.setColumnWidth(DASH_CHECK_COLUMN, 52);
   for (var column = DASH_FIXED_COLUMNS + 1; column <= columnCount; column += 1) sheet.setColumnWidth(column, 46);
-  sheet.setFrozenRows(DASH_NAME_ROW);
+  // 행은 고정하지 않는다 — Google Sheets는 고정 행 영역 안에 차트를 둘 수 없어서,
+  // 13행을 고정하면 차트가 14행 아래로 밀려나고 위로 올릴 수도 없다. (열 6개 고정은 유지)
+  sheet.setFrozenRows(0);
   sheet.setFrozenColumns(DASH_FIXED_COLUMNS);
   sheet.setHiddenGridlines(true);
 
@@ -218,7 +220,7 @@ function dash_resetChartData_(spreadsheet) {
   return chartData;
 }
 
-// 차트 앵커 = G1. 고정 영역(1~13행) 안에 있어야 스크롤해도 차트가 화면에 남는다.
+// 차트 앵커 = G1 (최상단). 행 고정이 없어야 이 위치에 실제로 놓인다 (dash_writeDashboard_ 참조).
 // 높이 230px ≈ 11행이라 12~13행 헤더는 가리지 않는다.
 var DASH_CHART_ANCHOR_COLUMN = 7;
 
