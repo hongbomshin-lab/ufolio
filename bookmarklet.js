@@ -216,7 +216,7 @@ function bookmarkletRuntime(webAppUrl) {
                 menuName: String(item.menu_name ?? ""),
                 itemName: String(item.pc_name ?? ""),
                 approvedCount: nullableNumber(item.app_cnt),
-                // 유폴리오 요약표의 "제출 건수" = 승인 전 대기 건수 (tot_cnt = app_cnt + submit_cnt)
+                // submit_cnt = 승인 전 대기 건수. 유폴리오 화면의 "제출 건수"는 tot_cnt = app_cnt + submit_cnt (총 제출).
                 pendingCount: nullableNumber(item.submit_cnt),
                 patientCount: nullableNumber(item.sum_patient_cnt),
                 score: scoreUnset ? null : nullableNumber(item.cal_score),

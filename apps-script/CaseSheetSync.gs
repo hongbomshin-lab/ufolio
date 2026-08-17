@@ -251,9 +251,15 @@ function case_comparisonRow_(row, aggregated, status, latestAuthAt) {
   var authenticated = !!(aggregated && aggregated.targetFound);
   var ufolioValue = aggregated && aggregated.found ? aggregated.value : "";
   var metrics = (aggregated && aggregated.metrics) || {};
+  // 유폴리오 화면의 "제출 건수" = 승인 + 승인대기 합(tot_cnt). RAW에는 승인대기(submit_cnt)만 있으므로 여기서 합산한다.
+  var approvedMetric = metrics["승인수"];
+  var pendingValue = aggregated ? aggregated.pending : "";
+  var submitTotal = case_isBlank_(approvedMetric) && case_isBlank_(pendingValue)
+    ? ""
+    : Number(approvedMetric || 0) + Number(pendingValue || 0);
   return {
-    // 제출수(=승인대기)·승인수·환자수·점수 네 값을 모두 표시. 인증을 아예 안 보낸 학생은 전부 "미인증".
-    submitDisplay: authenticated ? (aggregated ? aggregated.pending : "") : "미인증",
+    // 제출수·승인수·환자수·점수 네 값을 모두 표시. 인증을 아예 안 보낸 학생은 전부 "미인증".
+    submitDisplay: authenticated ? submitTotal : "미인증",
     approvedDisplay: authenticated ? (metrics["승인수"] == null ? "" : metrics["승인수"]) : "미인증",
     patientDisplay: authenticated ? (metrics["환자수"] == null ? "" : metrics["환자수"]) : "미인증",
     scoreDisplay: authenticated ? (metrics["점수"] == null ? "" : metrics["점수"]) : "미인증",

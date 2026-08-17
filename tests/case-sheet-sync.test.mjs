@@ -219,7 +219,10 @@ test("refresh comparisons cover equal, pending, source-missing, and unauthentica
   assert.equal(byAttendance[1].ufolioDisplay, 3);
   assert.equal(byAttendance[4].ufolioDisplay, "미인증");
   // 네 측정값이 모두 표시되고, 미인증 학생은 전부 "미인증"으로 나온다.
-  assert.equal(byAttendance[1].submitDisplay, 2);
+  // 제출수는 유폴리오 화면과 같은 총 제출(승인 3 + 승인대기 2).
+  assert.equal(byAttendance[1].submitDisplay, 5);
+  // 승인대기가 빈칸(구버전 북마클릿)이면 승인수만으로 계산한다.
+  assert.equal(byAttendance[2].submitDisplay, 3);
   assert.equal(byAttendance[1].approvedDisplay, 3);
   assert.equal(byAttendance[1].patientDisplay, "");
   assert.equal(byAttendance[1].scoreDisplay, "");
