@@ -20,6 +20,45 @@ var DASH_COLORS = {
   white: "#FFFFFF",
 };
 
+// 조건 검색 패널: 차트(G1 앵커, 폭 620px ≈ G~T열) 오른쪽인 V열부터 11행까지.
+// 기준값·조건은 X열(병합 X:Y)에 입력받고, 학생 목록은 V5:AS11 한 칸에 뿌린다.
+var DASH_FILTER_COLUMN = 22;
+var DASH_FILTER_INPUT_COLUMN = 24;
+var DASH_FILTER_LAST_COLUMN = 45;
+var DASH_FILTER_VALUE_ROW = 2;
+var DASH_FILTER_MODE_ROW = 3;
+var DASH_FILTER_COUNT_ROW = 4;
+var DASH_FILTER_LIST_ROW = 5;
+var DASH_FILTER_MODES = ["이상", "이하"];
+var DASH_FILTER_HINT = "항목의 [그래프] 체크박스를 누른 뒤 기준값을 입력하세요. 값이 비어 있는(미인증) 학생은 세지 않습니다.";
+var DASH_FILTER_EMPTY = "먼저 항목의 [그래프] 체크박스를 누르세요.";
+
+// "01강민수" 처럼 출석번호를 2자리로 채워 이름 앞에 붙인다. (100번은 그대로 3자리)
+function dash_studentLabel_(attendanceNo, name) {
+  var text = String(attendanceNo == null ? "" : attendanceNo).trim();
+  var number = Number(text);
+  var padded = text !== "" && isFinite(number) ? (number < 10 ? "0" + number : String(number)) : text;
+  return padded + String(name == null ? "" : name).trim();
+}
+
+// 기준값 이상/이하인 학생만 골라 인원수와 목록 문자열을 만든다. 값이 없는 학생은 대상에서 뺀다.
+// 기준값이 비었거나 숫자가 아니면 null (= 아직 검색 조건이 없음).
+function dash_filterStudents_(values, numbers, names, threshold, mode) {
+  if (case_isBlank_(threshold)) return null;
+  var limit = Number(threshold);
+  if (!isFinite(limit)) return null;
+  var atMost = String(mode == null ? "" : mode).trim() === "이하";
+  var matched = [];
+  (values || []).forEach(function (value, index) {
+    if (case_isBlank_(value)) return;
+    var number = Number(value);
+    if (!isFinite(number)) return;
+    if (atMost ? number > limit : number < limit) return;
+    matched.push(dash_studentLabel_((numbers || [])[index], (names || [])[index]));
+  });
+  return { count: matched.length, list: matched.join(", ") };
+}
+
 // 외과·보철은 현황시트와 매칭된 항목만 유폴리오에서 받아온다(북마클릿이 나머지를 아예 안 보냄).
 // 그래서 미매핑 항목 행은 영원히 빈칸으로 남아 "아무도 안 한 항목"처럼 보인다. 두 과는 매핑된 항목만 그린다.
 var DASH_MAPPED_ONLY_DEPARTMENTS = ["구강악안면외과", "보철과"];
@@ -171,14 +210,18 @@ function dash_writeDashboard_(spreadsheet, matrix) {
   var chartData = spreadsheet.getSheetByName(DASH_CHART_SHEET) || spreadsheet.insertSheet(DASH_CHART_SHEET);
   var studentCount = matrix.students.length;
   var columnCount = DASH_FIXED_COLUMNS + Math.max(1, studentCount);
+  var lastColumn = Math.max(columnCount, DASH_FILTER_LAST_COLUMN); // 조건 검색 패널이 쓰는 AS열까지 확보
   var rowCount = DASH_FIRST_DATA_ROW - 1 + Math.max(1, matrix.rows.length);
-  if (sheet.getMaxColumns() < columnCount) sheet.insertColumnsAfter(sheet.getMaxColumns(), columnCount - sheet.getMaxColumns());
+  if (sheet.getMaxColumns() < lastColumn) sheet.insertColumnsAfter(sheet.getMaxColumns(), lastColumn - sheet.getMaxColumns());
   if (sheet.getMaxRows() < rowCount + 5) sheet.insertRowsAfter(sheet.getMaxRows(), rowCount + 5 - sheet.getMaxRows());
+  // clear() 는 병합을 풀지 않는다. 조건 검색 패널을 다시 병합하려면 먼저 윗단(1~11행)을 해제해야 한다.
+  sheet.getRange(1, 1, DASH_HEADER_ROW - 1, sheet.getMaxColumns()).breakApart();
   sheet.clear();
   sheet.getRange(1, DASH_CHECK_COLUMN, sheet.getMaxRows(), 1).clearDataValidations();
+  sheet.getRange(1, DASH_FILTER_INPUT_COLUMN, DASH_HEADER_ROW - 1, 1).clearDataValidations();
 
   sheet.getRange(1, 1).setValue("유폴리오 대시보드").setFontSize(15).setFontWeight("bold").setFontColor(DASH_COLORS.navy);
-  sheet.getRange(2, 1).setValue("아래 표에서 항목의 [그래프] 체크박스를 누르면 오른쪽 위 그래프에 그 항목의 분포가 표시됩니다. 회색 학생은 아직 유폴리오를 한 번도 보내지 않았습니다.")
+  sheet.getRange(2, 1).setValue("항목의 [그래프] 체크박스를 눌러야 선택됩니다. 오른쪽 위에 분포 그래프와 조건별 학생 찾기가 함께 표시됩니다.")
     .setFontColor("#666666");
 
   sheet.getRange(3, 1, DASH_PANEL_LABELS.length, 1).setValues(DASH_PANEL_LABELS.map(function (label) { return [label]; }))
@@ -224,22 +267,98 @@ function dash_writeDashboard_(spreadsheet, matrix) {
     }
   }
   sheet.setColumnWidth(DASH_CHECK_COLUMN, 52);
-  for (var column = DASH_FIXED_COLUMNS + 1; column <= columnCount; column += 1) sheet.setColumnWidth(column, 46);
+  for (var column = DASH_FIXED_COLUMNS + 1; column <= lastColumn; column += 1) sheet.setColumnWidth(column, 46);
   // 행은 고정하지 않는다 — Google Sheets는 고정 행 영역 안에 차트를 둘 수 없어서,
   // 13행을 고정하면 차트가 14행 아래로 밀려나고 위로 올릴 수도 없다. (열 6개 고정은 유지)
   sheet.setFrozenRows(0);
   sheet.setFrozenColumns(DASH_FIXED_COLUMNS);
   sheet.setHiddenGridlines(true);
 
+  dash_writeFilterPanel_(sheet);
   dash_resetChartData_(spreadsheet);
+  dash_setSelectedRow_(spreadsheet, 0); // 항목 행 번호가 바뀌므로 이전 선택은 버린다
   dash_ensureChart_(sheet, chartData);
 }
 
+function dash_chartDataSheet_(spreadsheet) {
+  return spreadsheet.getSheetByName(DASH_CHART_SHEET) || spreadsheet.insertSheet(DASH_CHART_SHEET);
+}
+
 function dash_resetChartData_(spreadsheet) {
-  var chartData = spreadsheet.getSheetByName(DASH_CHART_SHEET) || spreadsheet.insertSheet(DASH_CHART_SHEET);
+  var chartData = dash_chartDataSheet_(spreadsheet);
   chartData.getRange(1, 1, DASH_CHART_MAX_ROWS + 1, 2).clearContent();
   chartData.getRange(1, 1, 1, 2).setValues([["값", "인원"]]);
   return chartData;
+}
+
+// 선택한 항목의 행 번호는 (숨김) 차트데이터 D1 에 적어 둔다.
+// 조건 검색은 체크박스를 누른 뒤에도 실행되므로 "지금 어느 항목이 선택돼 있는지"를 따로 기억해야 한다.
+function dash_setSelectedRow_(spreadsheet, row) {
+  dash_chartDataSheet_(spreadsheet).getRange("D1").setValue(row || "");
+}
+
+function dash_getSelectedRow_(spreadsheet) {
+  var value = Number(dash_chartDataSheet_(spreadsheet).getRange("D1").getValue());
+  return isFinite(value) && value >= DASH_FIRST_DATA_ROW ? value : 0;
+}
+
+// 학생 열은 G열부터 빈칸 없이 이어진다. 조건 검색 패널이 V열 위쪽을 쓰므로 getLastColumn 은 못 믿는다.
+function dash_studentColumnCount_(sheet) {
+  var width = Math.max(0, sheet.getLastColumn() - DASH_FIXED_COLUMNS);
+  if (width === 0) return 0;
+  var header = sheet.getRange(DASH_HEADER_ROW, DASH_FIXED_COLUMNS + 1, 1, width).getValues()[0];
+  var count = 0;
+  while (count < header.length && !case_isBlank_(header[count])) count += 1;
+  return count;
+}
+
+function dash_writeFilterPanel_(sheet) {
+  var first = DASH_FILTER_COLUMN;
+  var input = DASH_FILTER_INPUT_COLUMN;
+  var width = DASH_FILTER_LAST_COLUMN - first + 1;
+  sheet.getRange(1, first, 1, width).merge().setValue("조건별 학생 찾기 — 체크한 항목 기준")
+    .setBackground(DASH_COLORS.navy).setFontColor(DASH_COLORS.white).setFontWeight("bold")
+    .setHorizontalAlignment("center").setVerticalAlignment("middle");
+  [["기준값 입력", DASH_FILTER_VALUE_ROW], ["조건", DASH_FILTER_MODE_ROW], ["해당 인원", DASH_FILTER_COUNT_ROW]]
+    .forEach(function (entry) {
+      sheet.getRange(entry[1], first, 1, input - first).merge().setValue(entry[0])
+        .setFontWeight("bold").setBackground(DASH_COLORS.paleBlue)
+        .setHorizontalAlignment("center").setVerticalAlignment("middle");
+      sheet.getRange(entry[1], input, 1, 2).merge()
+        .setHorizontalAlignment("center").setVerticalAlignment("middle");
+    });
+  sheet.getRange(DASH_FILTER_VALUE_ROW, input).setBackground(DASH_COLORS.paleYellow).setNumberFormat("0.##");
+  sheet.getRange(DASH_FILTER_MODE_ROW, input).setBackground(DASH_COLORS.paleYellow).setValue(DASH_FILTER_MODES[0])
+    .setDataValidation(
+      SpreadsheetApp.newDataValidation().requireValueInList(DASH_FILTER_MODES, true).setAllowInvalid(false).build(),
+    );
+  sheet.getRange(DASH_FILTER_COUNT_ROW, input).setBackground(DASH_COLORS.paleBlue).setFontWeight("bold");
+  sheet.getRange(DASH_FILTER_VALUE_ROW, input + 2, 3, DASH_FILTER_LAST_COLUMN - input - 1).merge()
+    .setValue(DASH_FILTER_HINT).setWrap(true).setVerticalAlignment("middle").setFontColor("#666666");
+  sheet.getRange(DASH_FILTER_LIST_ROW, first, DASH_HEADER_ROW - DASH_FILTER_LIST_ROW, width).merge()
+    .setValue(DASH_FILTER_EMPTY).setWrap(true)
+    .setHorizontalAlignment("left").setVerticalAlignment("top");
+}
+
+// 기준값·조건 셀이 바뀌거나 다른 항목을 고를 때마다 인원수와 학생 목록을 다시 쓴다.
+function dash_applyFilter_(sheet) {
+  var spreadsheet = sheet.getParent();
+  var selectedRow = dash_getSelectedRow_(spreadsheet);
+  var studentCount = dash_studentColumnCount_(sheet);
+  var result = null;
+  if (selectedRow && studentCount > 0) {
+    result = dash_filterStudents_(
+      sheet.getRange(selectedRow, DASH_FIXED_COLUMNS + 1, 1, studentCount).getValues()[0],
+      sheet.getRange(DASH_HEADER_ROW, DASH_FIXED_COLUMNS + 1, 1, studentCount).getValues()[0],
+      sheet.getRange(DASH_NAME_ROW, DASH_FIXED_COLUMNS + 1, 1, studentCount).getValues()[0],
+      sheet.getRange(DASH_FILTER_VALUE_ROW, DASH_FILTER_INPUT_COLUMN).getValue(),
+      sheet.getRange(DASH_FILTER_MODE_ROW, DASH_FILTER_INPUT_COLUMN).getValue(),
+    );
+  }
+  var listText = DASH_FILTER_EMPTY;
+  if (selectedRow) listText = result ? (result.list || "조건에 해당하는 학생이 없습니다.") : "기준값을 입력하세요.";
+  sheet.getRange(DASH_FILTER_COUNT_ROW, DASH_FILTER_INPUT_COLUMN).setValue(result ? result.count + "명" : "");
+  sheet.getRange(DASH_FILTER_LIST_ROW, DASH_FILTER_COLUMN).setValue(listText);
 }
 
 // 차트 앵커 = G1 (최상단). 행 고정이 없어야 이 위치에 실제로 놓인다 (dash_writeDashboard_ 참조).
@@ -268,45 +387,37 @@ function dash_ensureChart_(sheet, chartData) {
   sheet.insertChart(chart);
 }
 
-// 그래프 체크박스를 누르면 실행되는 단순 트리거. onSelectionChange 가 간헐적으로 안 먹어서 만든 확실한 경로.
+// F열 체크박스와 조건 검색 입력에만 반응하는 단순 트리거.
+// 행을 클릭했다고 선택되지는 않는다(onSelectionChange 없음) — 스크롤·복사 중에 선택이 바뀌면 곤란하다.
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
     var range = e.range;
     var sheet = range.getSheet();
     if (sheet.getName() !== DASH_SHEET) return;
-    if (range.getColumn() !== DASH_CHECK_COLUMN || range.getRow() < DASH_FIRST_DATA_ROW) return;
-    if (range.getValue() !== true) return;
-    dash_selectItem_(sheet, range.getRow());
-    range.setValue(false);
+    var row = range.getRow();
+    var column = range.getColumn();
+    if (column === DASH_CHECK_COLUMN && row >= DASH_FIRST_DATA_ROW) {
+      if (range.getValue() !== true) return;
+      dash_selectItem_(sheet, row);
+      range.setValue(false);
+      return;
+    }
+    if (column === DASH_FILTER_INPUT_COLUMN && (row === DASH_FILTER_VALUE_ROW || row === DASH_FILTER_MODE_ROW)) {
+      dash_applyFilter_(sheet);
+    }
   } catch (error) {
     // 편집 이벤트는 실패해도 조용히 넘어간다.
   }
 }
 
-// 대시보드에서 항목 행을 클릭하면 실행되는 단순 트리거.
-function onSelectionChange(e) {
-  try {
-    if (!e || !e.range) return;
-    var sheet = e.range.getSheet();
-    if (sheet.getName() !== DASH_SHEET) return;
-    var row = e.range.getRow();
-    if (row < DASH_FIRST_DATA_ROW) return;
-    if (case_isBlank_(sheet.getRange(row, 3).getValue())) return;
-    dash_selectItem_(sheet, row);
-  } catch (error) {
-    // 선택 이벤트는 실패해도 조용히 넘어간다. (권한·타이밍 문제로 간헐 실패 가능)
-  }
-}
-
 function dash_selectItem_(sheet, row) {
   var spreadsheet = sheet.getParent();
-  var lastColumn = sheet.getLastColumn();
-  var rowValues = sheet.getRange(row, 1, 1, lastColumn).getValues()[0];
-  var studentValues = rowValues.slice(DASH_FIXED_COLUMNS);
+  var studentCount = dash_studentColumnCount_(sheet);
+  var rowValues = sheet.getRange(row, 1, 1, DASH_FIXED_COLUMNS + Math.max(1, studentCount)).getValues()[0];
+  var studentValues = rowValues.slice(DASH_FIXED_COLUMNS, DASH_FIXED_COLUMNS + studentCount);
   var submitted = studentValues.filter(function (value) { return !case_isBlank_(value); }).length;
-  var total = sheet.getRange(DASH_HEADER_ROW, DASH_FIXED_COLUMNS + 1, 1, lastColumn - DASH_FIXED_COLUMNS)
-    .getValues()[0].filter(function (value) { return !case_isBlank_(value); }).length;
+  var total = studentCount;
   var stats = dash_stats_(studentValues);
   sheet.getRange(3, 2, DASH_PANEL_LABELS.length, 1).setValues([
     [rowValues[0] + " · " + rowValues[2]],
@@ -327,4 +438,6 @@ function dash_selectItem_(sheet, row) {
     if (stats) title += " · 평균 " + dash_round_(stats.mean) + " · 표준편차 " + dash_round_(stats.sd);
     sheet.updateChart(chart.modify().setOption("title", title).build());
   }
+  dash_setSelectedRow_(spreadsheet, row);
+  dash_applyFilter_(sheet);
 }
