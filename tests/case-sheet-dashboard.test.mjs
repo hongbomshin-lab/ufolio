@@ -68,6 +68,44 @@ test("dashboard matrix follows the measurement settings sheet over the fallback"
   assert.deepEqual(matrix.rows[0].values, [9]);
 });
 
+test("dashboard hides unmapped OMS/prosthodontics items but keeps other departments whole", () => {
+  const dash = loadDashboard();
+  // 항목매핑 시트 행 형식: [매핑키, 활성, 검토상태, 소스키, 표시명, 완료식, 예정식, 인증대상식, U-FOLIO 대상, ...]
+  const mappingRow = (key, active, review, targets) => [key, active, review, "SRC", "", "", "", "VALUE(C)", targets];
+  const mappingRows = [
+    mappingRow("OMS_EXT_A", "Y", "승인", `${PRACTICE}|구강악안면외과|증례별 임상참여|Extraction_[A]`),
+    mappingRow("PROS_CHARTING", "Y", "승인", `${PRACTICE}|보철과|증례별 임상참여|22. Charting`),
+    mappingRow("OMS_BIOPSY", "N", "보류", `${PRACTICE}|구강악안면외과|증례별 임상참여|Biopsy`),
+    mappingRow("PERIO_FLAP", "Y", "승인", `${PRACTICE}|치주과|증례별 임상참여|Flap Assist`),
+  ];
+  const items = [
+    item("구강악안면외과", "증례별 임상참여", "Extraction_[A]"),
+    item("구강악안면외과", "증례별 임상참여", "Sinus lifting, GBR_[A]"),
+    item("구강악안면외과", "증례별 임상참여", "Biopsy"),
+    item("보철과", "증례별 임상참여", "22. Charting"),
+    item("보철과", "증례별 임상참여", "16. Final impression"),
+    item("치주과", "증례별 임상참여", "Flap Assist"),
+    item("보존과", "증례별 임상참여", "Endodontic treatment(practice)"),
+  ];
+
+  const visible = dash.dash_visibleItems_(items, mappingRows);
+
+  assert.deepEqual(visible.map((row) => row.item), [
+    "Extraction_[A]",
+    "22. Charting",
+    "Flap Assist",
+    // 매핑이 없는 다른 과 항목은 그대로 남는다 (보존과는 전 항목 전송 대상).
+    "Endodontic treatment(practice)",
+  ]);
+  // 비활성·보류 매핑만 있는 항목은 유폴리오가 보내주지 않으므로 감춘다.
+  assert.equal(visible.some((row) => row.item === "Biopsy"), false);
+  // 매핑 시트를 못 읽어도 다른 과는 절대 사라지지 않는다.
+  assert.deepEqual(
+    dash.dash_visibleItems_(items, []).map((row) => row.department),
+    ["치주과", "보존과"],
+  );
+});
+
 test("distribution counts people per distinct value and skips blanks", () => {
   const dash = loadDashboard();
   assert.deepEqual(Array.from(dash.dash_distribution_([2, "", 1, 2, 2, "", 0]), (row) => Array.from(row)), [

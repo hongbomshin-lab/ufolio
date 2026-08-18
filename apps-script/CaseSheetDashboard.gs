@@ -20,6 +20,25 @@ var DASH_COLORS = {
   white: "#FFFFFF",
 };
 
+// 외과·보철은 현황시트와 매칭된 항목만 유폴리오에서 받아온다(북마클릿이 나머지를 아예 안 보냄).
+// 그래서 미매핑 항목 행은 영원히 빈칸으로 남아 "아무도 안 한 항목"처럼 보인다. 두 과는 매핑된 항목만 그린다.
+var DASH_MAPPED_ONLY_DEPARTMENTS = ["구강악안면외과", "보철과"];
+
+function dash_visibleItems_(items, mappingRows) {
+  var mapped = {};
+  (mappingRows || []).forEach(function (row) {
+    if (String(row[1]).toUpperCase() !== "Y" || row[2] !== "승인") return;
+    String(row[8] || "").split(/\r?\n/).forEach(function (line) {
+      var parts = line.split("|");
+      if (parts.length === 4) mapped[case_itemKey_(parts[0], parts[1], parts[2], parts[3])] = true;
+    });
+  });
+  return (items || []).filter(function (entry) {
+    if (DASH_MAPPED_ONLY_DEPARTMENTS.indexOf(entry.department) < 0) return true;
+    return !!mapped[case_itemKey_(entry.practice, entry.department, entry.menu, entry.item)];
+  });
+}
+
 // 유폴리오 최신 제출 기준: 마스터 항목(행) × 학생(열) 값 매트릭스.
 // 각 항목의 값은 측정값설정 시트에서 고른 측정값(승인수/환자수/점수)을 따른다.
 function dash_buildMatrix_(items, students, latestByKey, settings, submittedAt) {
@@ -128,9 +147,12 @@ function dash_distribution_(values) {
 function dash_updateDashboard_(spreadsheet) {
   var masterRows = case_sheetRows_(spreadsheet.getSheetByName("마스터항목"), 8)
     .filter(function (row) { return row[1] !== "" && row[2] !== "" && row[4] !== ""; });
-  var items = masterRows.map(function (row) {
-    return { practice: row[1], department: row[2], menu: row[3], item: row[4], fallbackMeasurement: String(row[6] || "").trim() || "승인수" };
-  });
+  var items = dash_visibleItems_(
+    masterRows.map(function (row) {
+      return { practice: row[1], department: row[2], menu: row[3], item: row[4], fallbackMeasurement: String(row[6] || "").trim() || "승인수" };
+    }),
+    case_sheetRows_(spreadsheet.getSheetByName(CASE_MAPPING_SHEET), CASE_MAPPING_HEADERS.length),
+  );
   var students = case_sheetRows_(spreadsheet.getSheetByName("학생명단"), 3)
     .filter(function (row) { return row[0] !== ""; })
     .map(function (row) { return { attendanceNo: row[0], studentId: String(row[1]), name: row[2] }; });
