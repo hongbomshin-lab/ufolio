@@ -300,3 +300,46 @@ test("required source columns exclude identifier-detail columns from stage sheet
   assert.equal(columns.includes("C"), false);
   assert.equal(columns.includes("G"), false);
 });
+
+test("prosthodontic cross rows pair the status sheets and attach the u-folio value", () => {
+  const sync = loadSync();
+  const snapshot = (overrides) => ({
+    syncedAt: "2026-08-18T03:00:00.000Z",
+    sourceKey: "PROS",
+    attendanceNo: 1,
+    studentId: "2024-00001",
+    name: "학생일",
+    department: "보철과",
+    reviewStatus: "승인",
+    measurement: "승인수",
+    aggregation: "SUM",
+    priority: 60,
+    status: "정상",
+    stale: false,
+    ...overrides,
+  });
+  const removableTarget = "3학년 치의학 임상실습 2|보철과|Total Case|Total case evaluation (가철성)";
+  const chartingTarget = "3학년 치의학 임상실습 2|보철과|증례별 임상참여|22. Charting";
+  const rows = [
+    snapshot({ mappingKey: "PROS_REMOVABLE", sourceValue: 2, ufolioTargets: removableTarget }),
+    snapshot({ mappingKey: "PROS_TOTAL_REMOVABLE", sourceKey: "PROS_TOTAL", sourceValue: 2, ufolioTargets: removableTarget, priority: 50 }),
+    snapshot({ mappingKey: "PROS_CHARTING", sourceValue: 4, ufolioTargets: chartingTarget }),
+    snapshot({ mappingKey: "PROS_CHART_32", sourceKey: "PROS_CHART", sourceValue: 3, ufolioTargets: chartingTarget, priority: 50 }),
+    snapshot({ mappingKey: "PROS_FIXED", sourceValue: 1, ufolioTargets: "3학년 치의학 임상실습 2|보철과|Total Case|Total case evaluation (고정성)" }),
+    snapshot({ mappingKey: "PROS_STUDENT_EVAL", sourceValue: 10, ufolioTargets: "3학년 치의학 임상실습 2|보철과|증례별 임상참여|01. Student evaluation" }),
+  ];
+  const latest = {
+    ["2024-00001|" + removableTarget]: { approvedCount: 2, patientCount: "", score: "", pendingCount: "" },
+  };
+  const result = sync.case_prosCrossRows_(rows, latest);
+  assert.equal(result.length, 3); // 단타 등 비교쌍이 아닌 매핑은 제외
+  const byLabel = Object.fromEntries(result.map((row) => [row.label, row]));
+  assert.equal(byLabel["가철 누적"].status, "일치");
+  assert.equal(byLabel["가철 누적"].leftValue, 2);
+  assert.equal(byLabel["가철 누적"].rightValue, 2);
+  assert.equal(byLabel["가철 누적"].ufolioValue, 2);
+  assert.equal(byLabel["차팅(3-2)"].status, "불일치");
+  assert.equal(byLabel["차팅(3-2)"].ufolioValue, "미인증");
+  assert.equal(byLabel["고정 누적"].status, "원본누락");
+  assert.equal(byLabel["고정 누적"].rightValue, "");
+});

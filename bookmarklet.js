@@ -64,6 +64,55 @@ function bookmarkletRuntime(webAppUrl) {
       return Number.isFinite(number) ? number : null;
     };
     const PRACTICE_RE = /임상실습\s*2/;
+    // 외과·보철은 현황시트와 매핑된 항목만 전송한다(그 외 항목은 아예 payload에 담지 않음).
+    // 목록은 통합시트 항목매핑의 승인·활성 매핑과 같아야 하며, 바뀌면 학생들이 북마클릿을 재설치해야 한다.
+    const RESTRICTED_DEPARTMENT_ITEMS = {
+      구강악안면외과: [
+        "증례별 임상참여|Extraction_[P]_simple extraction",
+        "증례별 임상참여|Extraction_[P]_surgical extraction",
+        "증례별 임상참여|Extraction_[A]",
+        "증례별 임상참여|수술실-Malignant tumor and/or reconstruction surgery(free flap)",
+        "증례별 임상참여|수술실-Maxillofacial deformity and orthognathic surgery",
+        "증례별 임상참여|수술실-Cyst and benign tumor surgery",
+        "증례별 임상참여|수술실-Surgical extraction",
+        "증례별 임상참여|수술실-기타",
+        "증례별 임상참여|턱관절강 세정술",
+        "증례별 임상참여|외래 Recall check major",
+        "증례별 임상참여|외래 Recall check minor",
+        "증례별 임상참여|외래 신환 차팅",
+        "증례별 임상참여|병동 및 당직",
+        "증례별 임상참여|Implant 1st op. (2개 이하 식립)_[A]",
+        "증례별 임상참여|Implant 1st op (3개 이상 식립)_[A]",
+        "증례별 임상참여|Biopsy",
+        "증례별 임상참여|follow-up(Biopsy)",
+        "증례별 임상참여|I & D",
+        "증례별 임상참여|follow-up(I&D) 2nd or 3rd visit",
+        "기공|모델 제작 (악당)",
+        "Total Case|Biopsy",
+        "Total Case|I & D",
+      ],
+      보철과: [
+        "Total Case|Total case evaluation (가철성)",
+        "Total Case|Total case evaluation (고정성)",
+        "Total Case|Total case evaluation (Implant)",
+        "Total Case|Charting and Treatment planning evaluation",
+        "증례별 임상참여|01. Student evaluation",
+        "증례별 임상참여|02. observation (교수님)",
+        "증례별 임상참여|03. Implant assist",
+        "증례별 임상참여|22. Charting",
+        "기공|[가철성]Laboratory case evaluation",
+        "기공|[고정성]Laboratory case evaluation",
+        "기공|[임플란트]Laboratory case evaluation",
+      ],
+    };
+    const itemKeyText = (value) => String(value ?? "").trim().replace(/\s+/g, " ");
+    const restrictedByDepartment = new Map(
+      Object.entries(RESTRICTED_DEPARTMENT_ITEMS).map(([department, list]) => [department, new Set(list)]),
+    );
+    const shouldSendItem = (departmentName, menuName, itemName) => {
+      const allowed = restrictedByDepartment.get(itemKeyText(departmentName));
+      return !allowed || allowed.has(`${itemKeyText(menuName)}|${itemKeyText(itemName)}`);
+    };
     const parseIdentity = (text) => {
       const regex = /([가-힣A-Za-z][가-힣A-Za-z\s·]{0,39}?)\s*\(\s*(\d{4}-\d{5})\s*\)/g;
       const matches = [...String(text ?? "").matchAll(regex)];
@@ -209,6 +258,7 @@ function bookmarkletRuntime(webAppUrl) {
               },
             );
             for (const item of Array.isArray(detail.list) ? detail.list : []) {
+              if (!shouldSendItem(course.dt_name, item.menu_name, item.pc_name)) continue;
               const scoreUnset = item.db_score === "N";
               items.push({
                 practiceName: String(course.curr_name ?? ""),

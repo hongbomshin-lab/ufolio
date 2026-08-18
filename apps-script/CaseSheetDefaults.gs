@@ -51,6 +51,10 @@ function case_defaultConnections_() {
     ["PROS", "Y", "보철과", "보철과 원내생 현황", "", "현황 시트", "A", "B", 5, 96, 60, "CONFIG", "", "URL입력필요", ""],
     ["OMS", "Y", "구강악안면외과", "외과 케이스 현황", "", "케이스 현황", "A", "B", 3, 94, 70, "CONFIG", "", "URL입력필요", ""],
     ["OMS_STAGE", "Y", "구강악안면외과", "Biopsy 및 I&D 단계 현황", "", "시트1", "A", "B", 3, "", 60, "CONFIG", "", "URL입력필요", ""],
+    ["ORTHO", "Y", "교정과", "[교정] 케이스 현황", "", "현황 시트", "A", "B", 4, "", 60, "CONFIG", "", "URL입력필요", ""],
+    ["RADIO", "Y", "영상치의학과", "[영상] 케이스 현황", "", "💀케이스현황", "A", "B", 5, "", 60, "CONFIG", "", "URL입력필요", ""],
+    ["PROS_TOTAL", "Y", "보철과", "[보철] 개인별토탈 Total 현황", "", "Total 현황시트", "A", "B", 4, "", 50, "CONFIG", "", "URL입력필요", ""],
+    ["PROS_CHART", "Y", "보철과", "[보철] 차팅 케이스 현황", "", "시트1", "A", "B", 4, 95, 50, "CONFIG", "", "URL입력필요", "96행부터는 평균 등 요약행"],
   ];
 }
 
@@ -66,6 +70,8 @@ function case_defaultMappings_() {
   var oms = "구강악안면외과";
   var path = "구강병리과";
   var pros = "보철과";
+  var ortho = "교정과";
+  var radio = "영상치의학과";
   return [
     case_mapping_("CONS_OBS_CHART", "승인", "CONS_SCORE", "Observation Charting", "VALUE(C)", "", "VALUE(C)", case_target_(cons, "증례별 임상참여", "Observation (Charting) case"), "점수", "SUM", 70, "점수판 관찰 점수"),
     case_mapping_("CONS_OBS_ENDO", "승인", "CONS_SCORE", "Observation Endodontics", "VALUE(D)", "", "VALUE(D)", case_target_(cons, "증례별 임상참여", "Observation (Endodontics) case"), "점수", "SUM", 70, "점수판 관찰 점수"),
@@ -154,5 +160,18 @@ function case_defaultMappings_() {
     case_mapping_("OMS_STAGE_I_D", "승인", "OMS_STAGE", "I&D 단계 완료", "COUNT_NONEMPTY(H:J)", "", "COUNT_NONEMPTY(H:J)", [case_target_(oms, "증례별 임상참여", "I & D"), case_target_(oms, "증례별 임상참여", "follow-up(I&D) 2nd or 3rd visit")].join("\n"), "승인수", "SUM", 60, "1st·2nd·3rd 각각 1건; 2nd·3rd는 follow-up 승인 합계 2건"),
     case_mapping_("OMS_STAGE_BIOPSY_TOTAL", "승인", "OMS_STAGE", "Biopsy report 완료", "NONEMPTY_AS_ONE(F)", "", "NONEMPTY_AS_ONE(F)", case_target_(oms, "Total Case", "Biopsy"), "승인수", "SUM", 60, "F열 값은 report 사인 완료를 뜻하며 Total Case 승인 1건과 비교"),
     case_mapping_("OMS_STAGE_I_D_TOTAL", "승인", "OMS_STAGE", "I&D report 완료", "NONEMPTY_AS_ONE(K)", "", "NONEMPTY_AS_ONE(K)", case_target_(oms, "Total Case", "I & D"), "승인수", "SUM", 60, "K열 값은 report 사인 완료를 뜻하며 Total Case 승인 1건과 비교"),
+
+    case_mapping_("ORTHO_DIAG_TOTAL", "승인", "ORTHO", "진토 완료", "VALUE(E)", "", "VALUE(E)", case_target_(ortho, "증례별 임상참여", "Analysis & Diagnosis Case"), "승인수", "SUM", 60, "진단 total 완료 건수와 진단 승인수 비교"),
+    case_mapping_("ORTHO_BONDING_TOTAL", "승인", "ORTHO", "본토 완료", "VALUE(H)", "", "VALUE(H)", case_target_(ortho, "Total Case", "Total Case(신환)"), "승인수", "SUM", 60, "본딩 total 완료 건수와 신환 Total Case 승인수 비교"),
+    case_mapping_("ORTHO_BONDING_ASSIST", "승인", "ORTHO", "본딩 단타 승인", "VALUE(J)", "", "VALUE(J)", case_target_(ortho, "증례별 임상참여", "Assist case - Bonding"), "승인수", "SUM", 60, ""),
+
+    case_mapping_("RADIO_IO", "승인", "RADIO", "IO 매수", "VALUE(D)", "", "VALUE(D)", case_target_(radio, "증례별 임상참여", "구내 촬영 및 판독"), "환자수", "SUM", 60, "IO 매수(BW 포함)와 촬영 환자수 비교"),
+
+    // 보철비교 시트 전용: PROS 매핑과 같은 U-FOLIO 대상을 쓰되 우선순위를 낮춰 비교결과에는 PROS만 남긴다.
+    case_mapping_("PROS_TOTAL_REMOVABLE", "승인", "PROS_TOTAL", "가철 누적(토탈시트)", "VALUE(D)", "", "VALUE(D)", case_target_(pros, "Total Case", "Total case evaluation (가철성)"), "승인수", "SUM", 50, "보철비교용"),
+    case_mapping_("PROS_TOTAL_FIXED", "승인", "PROS_TOTAL", "고정 누적(토탈시트)", "VALUE(F)", "", "VALUE(F)", case_target_(pros, "Total Case", "Total case evaluation (고정성)"), "승인수", "SUM", 50, "보철비교용"),
+    case_mapping_("PROS_TOTAL_IMPLANT", "승인", "PROS_TOTAL", "임플 누적(토탈시트)", "VALUE(H)", "", "VALUE(H)", case_target_(pros, "Total Case", "Total case evaluation (Implant)"), "승인수", "SUM", 50, "보철비교용"),
+    case_mapping_("PROS_TOTAL_IMPLANT_ASSIST", "승인", "PROS_TOTAL", "임수 누적(토탈시트)", "VALUE(I)", "", "VALUE(I)", case_target_(pros, "증례별 임상참여", "03. Implant assist"), "승인수", "SUM", 50, "보철비교용"),
+    case_mapping_("PROS_CHART_32", "승인", "PROS_CHART", "3-2 차팅(차팅시트)", "VALUE(C)", "", "VALUE(C)", case_target_(pros, "증례별 임상참여", "22. Charting"), "승인수", "SUM", 50, "보철비교용"),
   ];
 }

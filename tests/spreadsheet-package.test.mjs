@@ -27,6 +27,7 @@ test("unified workbook contains every designed sheet including the measurement s
   for (const sheetName of [
     "대시보드",
     "비교결과",
+    "보철비교",
     "현황시트연결",
     "측정값설정",
     "항목매핑",
@@ -44,7 +45,7 @@ test("unified workbook contains every designed sheet including the measurement s
   ]) {
     assert.equal(builder.includes(`"${sheetName}"`), true, `빌더 시트 누락: ${sheetName}`);
   }
-  assert.match(builder, /const UNIFIED_SHEET_ORDER = \[\s*"대시보드",\s*"비교결과",\s*"현황시트연결",\s*"측정값설정"/);
+  assert.match(builder, /const UNIFIED_SHEET_ORDER = \[\s*"대시보드",\s*"비교결과",\s*"보철비교",\s*"현황시트연결",\s*"측정값설정"/);
 });
 
 test("comparison sheet uses the admin-facing columns with all four metrics", () => {

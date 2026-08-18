@@ -37,7 +37,7 @@ test("reviewed source row bounds exclude prosthodontic and OMS summary rows", ()
 test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   const mappings = mappingByKey();
 
-  assert.equal(Object.keys(mappings).length, 63);
+  assert.equal(Object.keys(mappings).length, 72);
 
   assert.equal(mappings.CONS_RESIN_STAGE[2], "승인");
   assert.equal(mappings.CONS_RESIN_STAGE[9], "점수");
@@ -108,6 +108,37 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.equal(mappings.PROS_LAB_SCORE[8], mappings.PROS_LAB[8]);
   assert.match(mappings.PROS_LAB_SCORE[12], /세 기공 항목.*점수 합계/);
   assert.doesNotMatch(mappings.PROS_LAB_SCORE[12], /임시/);
+
+  assert.equal(mappings.ORTHO_DIAG_TOTAL[7], "VALUE(E)");
+  assert.match(mappings.ORTHO_DIAG_TOTAL[8], /교정과\|증례별 임상참여\|Analysis & Diagnosis Case$/);
+  assert.equal(mappings.ORTHO_DIAG_TOTAL[9], "승인수");
+  assert.equal(mappings.ORTHO_BONDING_TOTAL[7], "VALUE(H)");
+  assert.match(mappings.ORTHO_BONDING_TOTAL[8], /교정과\|Total Case\|Total Case\(신환\)$/);
+  assert.equal(mappings.ORTHO_BONDING_ASSIST[7], "VALUE(J)");
+  assert.match(mappings.ORTHO_BONDING_ASSIST[8], /Assist case - Bonding$/);
+  assert.equal(mappings.RADIO_IO[7], "VALUE(D)");
+  assert.match(mappings.RADIO_IO[8], /영상치의학과\|증례별 임상참여\|구내 촬영 및 판독$/);
+  assert.equal(mappings.RADIO_IO[9], "환자수");
+});
+
+test("prosthodontic cross-check mappings mirror PROS targets with lower priority", () => {
+  const mappings = mappingByKey();
+  const pairs = [
+    ["PROS_REMOVABLE", "PROS_TOTAL_REMOVABLE", "VALUE(D)"],
+    ["PROS_FIXED", "PROS_TOTAL_FIXED", "VALUE(F)"],
+    ["PROS_IMPLANT", "PROS_TOTAL_IMPLANT", "VALUE(H)"],
+    ["PROS_IMPLANT_ASSIST", "PROS_TOTAL_IMPLANT_ASSIST", "VALUE(I)"],
+    ["PROS_CHARTING", "PROS_CHART_32", "VALUE(C)"],
+  ];
+  for (const [left, right, expression] of pairs) {
+    assert.equal(mappings[right][7], expression);
+    // 유폴리오 대상·측정값이 같아야 비교결과 중복 제거가 작동하고, 우선순위가 낮아야 PROS가 남는다.
+    assert.equal(mappings[right][8], mappings[left][8]);
+    assert.equal(mappings[right][9], mappings[left][9]);
+    assert.ok(mappings[right][11] < mappings[left][11], `${right} 우선순위가 ${left}보다 낮아야 합니다.`);
+    assert.equal(mappings[right][2], "승인");
+    assert.equal(mappings[right][1], "Y");
+  }
 });
 
 test("seed merge keeps existing rows and appends only missing defaults", () => {

@@ -16,7 +16,7 @@ await fs.mkdir(previewDir, { recursive: true });
 
 const expectedSheets = {
   "01_유폴리오_통합.xlsx": [
-    "대시보드", "비교결과", "현황시트연결", "측정값설정",
+    "대시보드", "비교결과", "보철비교", "현황시트연결", "측정값설정",
     "항목매핑", "미매핑항목", "연결진단", "동기화로그", "현황최신", "유폴리오최신",
     "마스터항목", "학생명단", "RAW", "전송기록", "설정", "사용안내",
   ],
@@ -78,7 +78,7 @@ for (const filePath of summary.files) {
   const sourceCount = connections.getRange("A2:A1000").values.filter((row) => row[0] !== "" && row[0] != null).length;
   const mappingCount = workbook.worksheets.getItem("항목매핑").getRange("A2:A2000").values.filter((row) => row[0] !== "" && row[0] != null).length;
   const nonBlankSourceUrls = connections.getRange("E2:E1000").values.filter((row) => row[0] !== "" && row[0] != null).length;
-  if (sourceCount !== 11) throw new Error(`현황시트 연결이 11개가 아닙니다: ${sourceCount}`);
+  if (sourceCount !== 15) throw new Error(`현황시트 연결이 15개가 아닙니다: ${sourceCount}`);
   if (mappingCount !== summary.mappingCount) throw new Error(`매핑 수가 빌드 요약과 다릅니다: ${mappingCount}`);
   if (nonBlankSourceUrls !== 0) throw new Error("기본 현황시트 URL에 실제 값이 들어 있습니다.");
 

@@ -4,6 +4,7 @@ var CASE_MEASUREMENT_SHEET = "측정값설정";
 var CASE_SNAPSHOT_SHEET = "현황최신";
 var CASE_UFOLIO_LATEST_SHEET = "유폴리오최신";
 var CASE_COMPARISON_SHEET = "비교결과";
+var CASE_PROS_CROSS_SHEET = "보철비교";
 var CASE_UNMAPPED_SHEET = "미매핑항목";
 var CASE_DIAGNOSTIC_SHEET = "연결진단";
 var CASE_SYNC_LOG_SHEET = "동기화로그";
@@ -18,6 +19,15 @@ var CASE_COMPARISON_HEADERS = [
   "제출건수", "승인수", "미승인", "환자수", "점수", "최신 유폴 인증",
 ];
 var CASE_MEASUREMENT_HEADERS = ["실습차수", "과", "메뉴/구분", "항목", "측정값"];
+var CASE_PROS_CROSS_HEADERS = ["출석번호", "학번", "이름", "항목", "현황조사값", "토탈·차팅시트값", "유폴리오값", "상태"];
+// 보철비교: 왼쪽=기존 현황조사(PROS), 오른쪽=개인별토탈(PROS_TOTAL)·차팅(PROS_CHART) 시트.
+var CASE_PROS_CROSS_PAIRS = [
+  { label: "가철 누적", left: "PROS_REMOVABLE", right: "PROS_TOTAL_REMOVABLE" },
+  { label: "고정 누적", left: "PROS_FIXED", right: "PROS_TOTAL_FIXED" },
+  { label: "임플 누적", left: "PROS_IMPLANT", right: "PROS_TOTAL_IMPLANT" },
+  { label: "임수 누적", left: "PROS_IMPLANT_ASSIST", right: "PROS_TOTAL_IMPLANT_ASSIST" },
+  { label: "차팅(3-2)", left: "PROS_CHARTING", right: "PROS_CHART_32" },
+];
 var CASE_UNMAPPED_HEADERS = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
 var CASE_DIAGNOSTIC_HEADERS = ["시각", "소스키", "행", "상태", "상세"];
 var CASE_SYNC_LOG_HEADERS = ["시각", "정상 소스", "실패 소스", "현황 집계", "비교 건수", "상태"];
@@ -241,10 +251,58 @@ function case_refreshAll_(services) {
   return {
     snapshotRows: snapshotRows,
     comparisonRows: comparisonRows,
+    prosCrossRows: case_prosCrossRows_(snapshotRows, latestByKey),
     unmappedRows: unmappedRows,
     diagnostics: diagnostics,
     connectionResults: connectionResults,
   };
+}
+
+// 보철비교: 현황조사 시트와 개인별토탈·차팅 시트의 같은 항목을 나란히 비교하고,
+// 참고용으로 해당 항목의 유폴리오 값(스냅샷의 측정값 기준)을 붙인다.
+function case_prosCrossRows_(snapshotRows, latestByKey) {
+  var relevant = {};
+  CASE_PROS_CROSS_PAIRS.forEach(function (pair) {
+    relevant[pair.left] = true;
+    relevant[pair.right] = true;
+  });
+  var rowByKey = {};
+  var anchorByStudent = {};
+  snapshotRows.forEach(function (row) {
+    if (!relevant[row.mappingKey] || row.reviewStatus !== "승인") return;
+    rowByKey[row.mappingKey + "|" + row.studentId] = row;
+    if (!anchorByStudent[row.studentId]) anchorByStudent[row.studentId] = row;
+  });
+  var output = [];
+  Object.keys(anchorByStudent).forEach(function (studentId) {
+    CASE_PROS_CROSS_PAIRS.forEach(function (pair, order) {
+      var left = rowByKey[pair.left + "|" + studentId];
+      var right = rowByKey[pair.right + "|" + studentId];
+      if (!left && !right) return;
+      var anchor = left || right;
+      var aggregated = case_aggregateUfolio_(anchor, latestByKey, studentId);
+      output.push({
+        attendanceNo: anchor.attendanceNo,
+        studentId: studentId,
+        name: anchor.name,
+        label: pair.label,
+        order: order,
+        leftValue: left ? left.sourceValue : "",
+        rightValue: right ? right.sourceValue : "",
+        ufolioValue: aggregated.targetFound ? (aggregated.found ? aggregated.value : "") : "미인증",
+        status: !left || !right
+          ? "원본누락"
+          : (case_compareValues_(left.sourceValue, right.sourceValue) === "일치" ? "일치" : "불일치"),
+      });
+    });
+  });
+  output.sort(function (left, right) {
+    var leftNo = Number(left.attendanceNo);
+    var rightNo = Number(right.attendanceNo);
+    if (isFinite(leftNo) && isFinite(rightNo) && leftNo !== rightNo) return leftNo - rightNo;
+    return left.order - right.order;
+  });
+  return output;
 }
 
 function case_comparisonRow_(row, aggregated, status, latestAuthAt) {
@@ -451,6 +509,13 @@ function refreshIntegratedData() {
         row.submitDisplay, row.approvedDisplay, row.pendingDisplay, row.patientDisplay, row.scoreDisplay, row.latestAuthAt];
     }));
     case_paintComparison_(comparisonSheet, result.comparisonRows);
+    var prosCrossSheet = spreadsheet.getSheetByName(CASE_PROS_CROSS_SHEET);
+    if (prosCrossSheet) {
+      case_replaceOutput_(prosCrossSheet, CASE_PROS_CROSS_HEADERS, result.prosCrossRows.map(function (row) {
+        return [row.attendanceNo, row.studentId, row.name, row.label, row.leftValue, row.rightValue, row.ufolioValue, row.status];
+      }));
+      case_paintProsCross_(prosCrossSheet, result.prosCrossRows);
+    }
     case_replaceOutput_(spreadsheet.getSheetByName(CASE_UNMAPPED_SHEET), CASE_UNMAPPED_HEADERS, result.unmappedRows.map(function (row) {
       return [row.mappingKey, row.sourceKey, row.label, row.reviewStatus, row.certificationExpression, row.ufolioTargets, row.note];
     }));
@@ -499,6 +564,27 @@ function case_paintComparison_(sheet, rows) {
   if (rows.length === 0) return;
   sheet.getRange(2, 1, rows.length, width).setBackgrounds(rows.map(function (row) {
     var color = case_comparisonRowColor_(row);
+    return Array.from({ length: width }, function () { return color; });
+  }));
+}
+
+// 보철비교 행 색: 두 현황시트 값이 일치=연초록, 불일치=노랑, 한쪽 원본 누락=연빨강.
+function case_prosCrossRowColor_(row) {
+  if (row.status === "일치") return "#E2F0D9";
+  if (row.status === "불일치") return "#FFF2CC";
+  return "#FCE4D6";
+}
+
+function case_paintProsCross_(sheet, rows) {
+  if (!sheet) return;
+  var width = CASE_PROS_CROSS_HEADERS.length;
+  var bodyRows = Math.max(1, sheet.getMaxRows() - 1);
+  sheet.getRange(1, 1, 1, width).setBackground("#2F75B5").setFontColor("#FFFFFF").setFontWeight("bold")
+    .setHorizontalAlignment("center").setVerticalAlignment("middle").setWrap(true);
+  sheet.getRange(2, 1, bodyRows, width).setBackground(null);
+  if (rows.length === 0) return;
+  sheet.getRange(2, 1, rows.length, width).setBackgrounds(rows.map(function (row) {
+    var color = case_prosCrossRowColor_(row);
     return Array.from({ length: width }, function () { return color; });
   }));
 }

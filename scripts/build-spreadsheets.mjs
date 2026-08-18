@@ -34,6 +34,7 @@ const palette = {
 const UNIFIED_SHEET_ORDER = [
   "대시보드",
   "비교결과",
+  "보철비교",
   "현황시트연결",
   "측정값설정",
   "항목매핑",
@@ -59,6 +60,7 @@ const measurementHeaders = ["실습차수", "과", "메뉴/구분", "항목", "�
 const unmappedHeaders = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
 const diagnosticHeaders = ["시각", "소스키", "행", "상태", "상세"];
 const syncLogHeaders = ["시각", "정상 소스", "실패 소스", "현황 집계", "비교 건수", "상태"];
+const prosCrossHeaders = ["출석번호", "학번", "이름", "항목", "현황조사값", "토탈·차팅시트값", "유폴리오값", "상태"];
 
 function parseRoster(text) {
   return text.trim().split(/\r?\n/).slice(1).filter(Boolean).map((line) => {
@@ -90,7 +92,7 @@ if (new Set(items.map((row) => [row.practice, row.department, row.menu, row.item
   throw new Error("마스터 항목 키가 중복되었습니다.");
 }
 if (new Set(roster.map((row) => row[1])).size !== roster.length) throw new Error("명단에 중복 학번이 있습니다.");
-if (defaults.connections.length !== 11) throw new Error("기본 현황시트 연결이 11개가 아닙니다.");
+if (defaults.connections.length !== 15) throw new Error("기본 현황시트 연결이 15개가 아닙니다.");
 
 function colLetter(index) {
   let value = index;
@@ -224,6 +226,9 @@ function buildUnifiedWorkbook() {
   // 행 색(미인증/불일치/일치)은 Apps Script 동기화가 칠하므로 조건부서식은 넣지 않는다.
   const comparison = addTableSheet(workbook, "비교결과", comparisonHeaders, [], [84, 120, 100, 120, 240, 82, 88, 74, 74, 74, 74, 74, 150]);
   comparison.freezePanes.freezeColumns(3);
+
+  const prosCross = addTableSheet(workbook, "보철비교", prosCrossHeaders, [], [84, 120, 100, 130, 100, 120, 92, 82]);
+  prosCross.freezePanes.freezeColumns(3);
 
   const connectionSheet = addTableSheet(workbook, "현황시트연결", defaults.connectionHeaders, defaults.connections, [110, 58, 125, 220, 390, 160, 92, 82, 92, 92, 82, 130, 160, 110, 420]);
   connectionSheet.getRange(`A2:L${defaults.connections.length + 1}`).format.fill = palette.paleYellow;

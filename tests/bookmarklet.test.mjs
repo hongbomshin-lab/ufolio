@@ -100,6 +100,32 @@ test("buildBookmarklet targets 임상실습 2 without a practice picker", () => 
   assert.match(source, /pendingCount/);
 });
 
+test("buildBookmarklet embeds the OMS/prosthodontics allowlist and filters items", () => {
+  const source = decodeURIComponent(
+    buildBookmarklet("https://script.google.com/macros/s/EXAMPLE_DEPLOYMENT/exec").slice(
+      "javascript:".length,
+    ),
+  );
+
+  assert.match(source, /RESTRICTED_DEPARTMENT_ITEMS/);
+  assert.match(source, /shouldSendItem\(course\.dt_name, item\.menu_name, item\.pc_name\)/);
+  // 외과·보철만 제한 대상이어야 하고, 매핑된 항목 키가 목록에 있어야 한다.
+  assert.match(source, /구강악안면외과:/);
+  assert.match(source, /보철과:/);
+  assert.doesNotMatch(source, /보존과:\s*\[/);
+  for (const required of [
+    "증례별 임상참여|Extraction_[P]_simple extraction",
+    "증례별 임상참여|follow-up(I&D) 2nd or 3rd visit",
+    "기공|모델 제작 (악당)",
+    "Total Case|Biopsy",
+    "Total Case|Total case evaluation (가철성)",
+    "증례별 임상참여|22. Charting",
+    "기공|[임플란트]Laboratory case evaluation",
+  ]) {
+    assert.ok(source.includes(required), `허용 목록 누락: ${required}`);
+  }
+});
+
 test("buildBookmarklet rejects missing or non-Apps-Script URLs", () => {
   assert.throws(
     () => buildBookmarklet(""),

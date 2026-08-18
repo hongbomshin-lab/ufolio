@@ -45,23 +45,25 @@ test("master config contains exactly 206 unique non-identifying item keys", () =
   assert.equal(items.some((row) => /\b\d{6,8}\b/.test(row.item)), false);
 });
 
-test("default connections cover ten active sources and one pending implant source", () => {
+test("default connections cover fourteen active sources and one pending implant source", () => {
   const defaults = loadDefaults();
   const rows = defaults.case_defaultConnections_();
   const objects = rows.map((row) => Object.fromEntries(defaults.CASE_CONNECTION_HEADERS.map((header, index) => [header, row[index]])));
   const keys = objects.map((row) => row["소스키"]);
   assert.deepEqual([...keys].sort(), [
-    "CONS_SCORE", "CONS_SURGERY", "EXT", "IMPLANT", "OM", "OMS", "OMS_STAGE", "PATH", "PED_CHART", "PERIO", "PROS",
+    "CONS_SCORE", "CONS_SURGERY", "EXT", "IMPLANT", "OM", "OMS", "OMS_STAGE", "ORTHO", "PATH", "PED_CHART", "PERIO",
+    "PROS", "PROS_CHART", "PROS_TOTAL", "RADIO",
   ].sort());
-  assert.equal(new Set(keys).size, 11);
+  assert.equal(new Set(keys).size, 15);
   assert.equal(objects.filter((row) => row["소스키"] !== "IMPLANT").every((row) => row["활성"] === "Y"), true);
   assert.equal(objects.find((row) => row["소스키"] === "IMPLANT")["활성"], "N");
   assert.equal(objects.every((row) => row["스프레드시트 URL"] === ""), true);
   assert.equal(objects.every((row) => /^[A-Z]{1,3}$/.test(row["출석번호 열"]) && /^[A-Z]{1,3}$/.test(row["이름 열"])), true);
   assert.equal(objects.every((row) => Number.isInteger(row["데이터 시작행"]) && row["데이터 시작행"] >= 2), true);
-  assert.equal(objects.filter((row) => !["PROS", "OMS"].includes(row["소스키"])).every((row) => row["데이터 종료행"] === ""), true);
+  assert.equal(objects.filter((row) => !["PROS", "OMS", "PROS_CHART"].includes(row["소스키"])).every((row) => row["데이터 종료행"] === ""), true);
   assert.equal(objects.find((row) => row["소스키"] === "PROS")["데이터 종료행"], 96);
   assert.equal(objects.find((row) => row["소스키"] === "OMS")["데이터 종료행"], 94);
+  assert.equal(objects.find((row) => row["소스키"] === "PROS_CHART")["데이터 종료행"], 95);
   assert.equal(objects.find((row) => row["소스키"] === "CONS_SCORE")["시트명"], "점수판");
   assert.equal(objects.find((row) => row["소스키"] === "CONS_SURGERY")["시트명"], "점수표");
   assert.equal(objects.find((row) => row["소스키"] === "PED_CHART")["시트명"], "차팅 현황");
@@ -73,6 +75,14 @@ test("default connections cover ten active sources and one pending implant sourc
   assert.equal(objects.find((row) => row["소스키"] === "PROS")["시트명"], "현황 시트");
   assert.equal(objects.find((row) => row["소스키"] === "OMS")["시트명"], "케이스 현황");
   assert.equal(objects.find((row) => row["소스키"] === "OMS_STAGE")["시트명"], "시트1");
+  assert.equal(objects.find((row) => row["소스키"] === "ORTHO")["시트명"], "현황 시트");
+  assert.equal(objects.find((row) => row["소스키"] === "RADIO")["시트명"], "💀케이스현황");
+  assert.equal(objects.find((row) => row["소스키"] === "PROS_TOTAL")["시트명"], "Total 현황시트");
+  assert.equal(objects.find((row) => row["소스키"] === "PROS_CHART")["시트명"], "시트1");
+  assert.equal(objects.find((row) => row["소스키"] === "ORTHO")["데이터 시작행"], 4);
+  assert.equal(objects.find((row) => row["소스키"] === "RADIO")["데이터 시작행"], 5);
+  assert.equal(objects.find((row) => row["소스키"] === "PROS_TOTAL")["데이터 시작행"], 4);
+  assert.equal(objects.find((row) => row["소스키"] === "PROS_CHART")["데이터 시작행"], 4);
 });
 
 test("approved mappings use the restricted DSL and valid master targets", () => {

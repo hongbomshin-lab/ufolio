@@ -16,7 +16,7 @@ var SYS_COLORS = {
 };
 
 // 관리자가 평소에 보는 시트 4개만 보이고, 나머지는 전부 숨긴다. (숨긴 시트는 시트 목록 ☰ 에서 다시 열 수 있다)
-var SYS_VISIBLE_SHEETS = ["대시보드", "비교결과", "현황시트연결", "측정값설정"];
+var SYS_VISIBLE_SHEETS = ["대시보드", "비교결과", "보철비교", "현황시트연결", "측정값설정"];
 var SYS_HIDDEN_SHEETS = [
   "항목매핑", "미매핑항목", "연결진단", "동기화로그", "현황최신", "유폴리오최신",
   "마스터항목", "학생명단", "RAW", "전송기록", "설정", "차트데이터", "사용안내",
@@ -101,6 +101,7 @@ function sys_ensureIntegrationSheets_(spreadsheet) {
     [CASE_SNAPSHOT_SHEET, CASE_SNAPSHOT_HEADERS],
     [CASE_UFOLIO_LATEST_SHEET, RAW_HEADERS],
     [CASE_COMPARISON_SHEET, CASE_COMPARISON_HEADERS],
+    [CASE_PROS_CROSS_SHEET, CASE_PROS_CROSS_HEADERS],
     [CASE_UNMAPPED_SHEET, CASE_UNMAPPED_HEADERS],
     [CASE_DIAGNOSTIC_SHEET, CASE_DIAGNOSTIC_HEADERS],
     [CASE_SYNC_LOG_SHEET, CASE_SYNC_LOG_HEADERS],
@@ -179,6 +180,7 @@ function sys_adminGuideLines_() {
     "대시보드에서 항목 행을 클릭하면 그 항목의 값 분포 그래프가 표시됩니다.",
     "비교결과에는 제출수·승인수·환자수·점수가 모두 표시됩니다. '미인증'(빨강)은 그 학생이 해당 항목 인증을 아직 보내지 않은 것입니다.",
     "비교결과 행 색: 측정값으로 고른 값이 현황값과 다르면 노랑, 같으면 초록, 미인증이면 빨강입니다.",
+    "보철비교에서는 보철 현황조사와 개인별토탈·차팅 시트의 같은 항목(가철·고정·임플·임수 누적, 3-2 차팅)을 나란히 비교하고 유폴리오 값을 참고로 보여줍니다.",
     "측정값설정에서 항목별로 승인수/환자수/점수 중 무엇으로 비교·집계할지 고를 수 있습니다. 바꾼 뒤 지금 전체 동기화를 실행하면 반영됩니다.",
     "현황시트연결은 원본 시트 URL이 바뀔 때만 수정합니다. 노란 셀이 관리자 입력 영역입니다.",
     "나머지 시트(RAW, 항목매핑, 연결진단 등)는 시스템 운영용이라 숨겨져 있습니다. 좌측 하단 시트 목록(☰)에서 다시 열 수 있습니다.",
@@ -238,6 +240,12 @@ function sys_applyAdminFormats_(spreadsheet) {
     comparison.getRange("M2:M20000").setNumberFormat("yyyy-mm-dd hh:mm");
     sys_ensureFilter_(comparison, CASE_COMPARISON_HEADERS.length);
   }
+  var prosCross = spreadsheet.getSheetByName(CASE_PROS_CROSS_SHEET);
+  if (prosCross) {
+    prosCross.setFrozenColumns(3);
+    prosCross.setColumnWidth(4, 130);
+    sys_ensureFilter_(prosCross, CASE_PROS_CROSS_HEADERS.length);
+  }
   var diagnostic = spreadsheet.getSheetByName(CASE_DIAGNOSTIC_SHEET);
   if (diagnostic) sys_ensureFilter_(diagnostic, CASE_DIAGNOSTIC_HEADERS.length);
   var syncLog = spreadsheet.getSheetByName(CASE_SYNC_LOG_SHEET);
@@ -258,6 +266,7 @@ function sys_reorderAndHideSheets_(spreadsheet) {
   var colors = {
     "대시보드": SYS_COLORS.navy,
     "비교결과": SYS_COLORS.blue,
+    "보철비교": SYS_COLORS.blue,
     "현황시트연결": "#FFD966",
     "측정값설정": "#FFD966",
   };

@@ -106,9 +106,9 @@ test("system setup exposes only the unified single-workbook workflow", () => {
   }
 });
 
-test("only the four admin-facing sheets stay visible and the rest are hidden", () => {
+test("only the five admin-facing sheets stay visible and the rest are hidden", () => {
   const setup = loadSystemSetup();
-  assert.deepEqual(Array.from(setup.SYS_VISIBLE_SHEETS), ["대시보드", "비교결과", "현황시트연결", "측정값설정"]);
+  assert.deepEqual(Array.from(setup.SYS_VISIBLE_SHEETS), ["대시보드", "비교결과", "보철비교", "현황시트연결", "측정값설정"]);
   const hidden = Array.from(setup.SYS_HIDDEN_SHEETS);
   for (const name of ["항목매핑", "미매핑항목", "연결진단", "동기화로그", "현황최신", "유폴리오최신", "마스터항목", "학생명단", "RAW", "전송기록", "설정", "차트데이터", "사용안내"]) {
     assert.ok(hidden.includes(name), `숨김 시트 누락: ${name}`);
