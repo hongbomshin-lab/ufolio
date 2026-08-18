@@ -50,6 +50,14 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.equal(mappings.CONS_OBS_SURG_SCORE[1], "N");
   assert.equal(mappings.CONS_OBS_SURG_SCORE[2], "보류");
 
+  // 치주 flap/implant 는 누적(E·H)이 아니라 3-2 완료(C·F)로 비교한다. 예정(D·G)은 예정식에만 남는다.
+  assert.equal(mappings.PERIO_FLAP[5], "VALUE(C)");
+  assert.equal(mappings.PERIO_FLAP[6], "VALUE(D)");
+  assert.equal(mappings.PERIO_FLAP[7], "VALUE(C)");
+  assert.equal(mappings.PERIO_IMPLANT[5], "VALUE(F)");
+  assert.equal(mappings.PERIO_IMPLANT[6], "VALUE(G)");
+  assert.equal(mappings.PERIO_IMPLANT[7], "VALUE(F)");
+
   assert.equal(mappings.OM_CHARTING[5], "VALUE(C)");
   assert.equal(mappings.OM_CHARTING[9], "환자수");
   assert.equal(mappings.OM_PT[2], "승인");

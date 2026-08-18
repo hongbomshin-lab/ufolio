@@ -89,8 +89,8 @@ function case_defaultMappings_() {
 
     case_mapping_("PED_CHARTING", "승인", "PED_CHART", "소아 차팅 누적", "VALUE(D)", "", "VALUE(D)", case_target_(ped, "증례별 임상참여", "practice - Charting (교수님/전공의 진료 참여)"), "승인수", "SUM", 80, "비어 있지 않은 차팅 건수"),
 
-    case_mapping_("PERIO_FLAP", "승인", "PERIO", "Flap 누적", "VALUE(E)", "VALUE(D)", "VALUE(E)", case_target_(perio, "증례별 임상참여", "Flap Assist"), "승인수", "SUM", 80, ""),
-    case_mapping_("PERIO_IMPLANT", "승인", "PERIO", "Implant 누적", "VALUE(H)", "VALUE(G)", "VALUE(H)", case_target_(perio, "증례별 임상참여", "Implant Assist"), "승인수", "SUM", 80, ""),
+    case_mapping_("PERIO_FLAP", "승인", "PERIO", "Flap 완료", "VALUE(C)", "VALUE(D)", "VALUE(C)", case_target_(perio, "증례별 임상참여", "Flap Assist"), "승인수", "SUM", 80, "예정(D) 제외한 3-2 완료(C)만 비교"),
+    case_mapping_("PERIO_IMPLANT", "승인", "PERIO", "Implant 완료", "VALUE(F)", "VALUE(G)", "VALUE(F)", case_target_(perio, "증례별 임상참여", "Implant Assist"), "승인수", "SUM", 80, "예정(G) 제외한 3-2 완료(F)만 비교"),
     case_mapping_("PERIO_BASIC", "승인", "PERIO", "OE+SC+PCI", "VALUE(I)", "", "VALUE(I)", [case_target_(perio, "증례별 임상참여", "Oral examination"), case_target_(perio, "증례별 임상참여", "Scaling"), case_target_(perio, "증례별 임상참여", "Plaque control instruction")].join("\n"), "승인수", "SUM", 80, "3개 항목 합계"),
     case_mapping_("PERIO_RP", "승인", "PERIO", "Root planing", "VALUE(J)", "", "VALUE(J)", case_target_(perio, "증례별 임상참여", "Root planing"), "승인수", "SUM", 80, ""),
 
