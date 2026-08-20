@@ -163,7 +163,7 @@ function case_defaultMappings_() {
 
     case_mapping_("ORTHO_DIAG_TOTAL", "승인", "ORTHO", "진토 완료", "VALUE(E)", "", "VALUE(E)", case_target_(ortho, "증례별 임상참여", "Analysis & Diagnosis Case"), "승인수", "SUM", 60, "진단 total 완료 건수와 진단 승인수 비교"),
     case_mapping_("ORTHO_BONDING_TOTAL", "승인", "ORTHO", "본토 완료", "VALUE(H)", "", "VALUE(H)", case_target_(ortho, "Total Case", "Total Case(신환)"), "승인수", "SUM", 60, "본딩 total 완료 건수와 신환 Total Case 승인수 비교"),
-    case_mapping_("ORTHO_BONDING_ASSIST", "승인", "ORTHO", "본딩 단타 승인", "VALUE(J)", "", "VALUE(J)", case_target_(ortho, "증례별 임상참여", "Assist case - Bonding"), "승인수", "SUM", 60, ""),
+    case_mapping_("ORTHO_BONDING_ASSIST", "승인", "ORTHO", "본딩 단타 승인", "VALUE(I)", "", "VALUE(I)", case_target_(ortho, "증례별 임상참여", "Assist case - Bonding"), "승인수", "SUM", 60, "2026-08 시트 개편: 본딩 단타 승인 건수 J열→I열"),
 
     case_mapping_("RADIO_IO", "승인", "RADIO", "IO 매수", "VALUE(D)", "", "VALUE(D)", case_target_(radio, "증례별 임상참여", "구내 촬영 및 판독"), "환자수", "SUM", 60, "IO 매수(BW 포함)와 촬영 환자수 비교"),
 

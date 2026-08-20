@@ -122,7 +122,7 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.equal(mappings.ORTHO_DIAG_TOTAL[9], "승인수");
   assert.equal(mappings.ORTHO_BONDING_TOTAL[7], "VALUE(H)");
   assert.match(mappings.ORTHO_BONDING_TOTAL[8], /교정과\|Total Case\|Total Case\(신환\)$/);
-  assert.equal(mappings.ORTHO_BONDING_ASSIST[7], "VALUE(J)");
+  assert.equal(mappings.ORTHO_BONDING_ASSIST[7], "VALUE(I)");
   assert.match(mappings.ORTHO_BONDING_ASSIST[8], /Assist case - Bonding$/);
   assert.equal(mappings.RADIO_IO[7], "VALUE(D)");
   assert.match(mappings.RADIO_IO[8], /영상치의학과\|증례별 임상참여\|구내 촬영 및 판독$/);
