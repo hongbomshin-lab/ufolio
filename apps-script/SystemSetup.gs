@@ -29,6 +29,7 @@ function onOpen() {
     .addItem("측정값 변경 적용", "applyMeasurementSettings")
     .addSeparator()
     .addItem("RAW 과거 제출 정리(최신만 남기기)", "compactRawSheet")
+    .addItem("화면 구성 새로 적용", "applyUnifiedWorkbookLayout")
     .addSeparator()
     .addItem("매일 새벽 3시 동기화 켜기", "installDailyRefreshTrigger")
     .addItem("자동 동기화 끄기", "removeRefreshTriggers")
