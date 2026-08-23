@@ -48,7 +48,7 @@ apps-script/CaseSheetDefaults.gs  11개 연결·63개 초기 매핑
 apps-script/CaseSheetSync.gs      읽기 전용 동기화·실패 격리
 apps-script/CaseSheetDashboard.gs 대시보드 매트릭스·분포 그래프
 apps-script/SystemSetup.gs        화면 구성·측정값설정·이관·새벽 3시 트리거
-config/ufolio-master-items.json   비식별 206개 마스터 항목
+config/ufolio-master-items.json   비식별 204개 마스터 항목
 docs/GOOGLE_SHEETS_SETUP.md       실제 설치·운영 가이드
 scripts/                           통합 xlsx 생성·전 시트 검증
 tests/                             Node 내장 테스트
@@ -62,7 +62,7 @@ tests/                             Node 내장 테스트
 npm.cmd test
 ```
 
-검증 범위에는 북마클릿, 수신 검증, 206개 마스터 키, 11개 연결, 제한 집계식, 이름 대조, U-FOLIO 미인증과 0점 구분, 현황 공란의 0 처리, 측정값설정 우선 적용, 대시보드 매트릭스·분포, 소스별 원자적 갱신, 마지막 정상값 유지, 단일 워크북 패키지 구조가 포함됩니다.
+검증 범위에는 북마클릿, 수신 검증, 204개 마스터 키, 11개 연결, 제한 집계식, 이름 대조, U-FOLIO 미인증과 0점 구분, 현황 공란의 0 처리, 측정값설정 우선 적용, 대시보드 매트릭스·분포, 소스별 원자적 갱신, 마지막 정상값 유지, 단일 워크북 패키지 구조가 포함됩니다.
 
 ## Google Sheets 설치 요약
 

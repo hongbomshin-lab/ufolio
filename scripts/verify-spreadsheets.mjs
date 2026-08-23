@@ -65,10 +65,10 @@ for (const filePath of summary.files) {
 
   const master = workbook.worksheets.getItem("마스터항목");
   const masterCount = master.getRange("A2:A500").values.filter((row) => row[0] !== "" && row[0] != null).length;
-  if (masterCount !== 206) throw new Error(`${fileName} 마스터 항목이 206개가 아닙니다: ${masterCount}`);
+  if (masterCount !== 204) throw new Error(`${fileName} 마스터 항목이 204개가 아닙니다: ${masterCount}`);
 
   const measurementCount = workbook.worksheets.getItem("측정값설정").getRange("A2:A500").values.filter((row) => row[0] !== "" && row[0] != null).length;
-  if (measurementCount !== 206) throw new Error(`측정값설정 항목이 206개가 아닙니다: ${measurementCount}`);
+  if (measurementCount !== 204) throw new Error(`측정값설정 항목이 204개가 아닙니다: ${measurementCount}`);
 
   const roster = workbook.worksheets.getItem("학생명단");
   const rosterCount = roster.getRange("A2:A500").values.filter((row) => row[0] !== "" && row[0] != null).length;

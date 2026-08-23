@@ -87,8 +87,8 @@ const items = Object.entries(masterConfig.departments).flatMap(([department, row
 );
 const defaults = loadDefaults(await fs.readFile(defaultsPath, "utf8"));
 
-if (items.length !== 206) throw new Error(`마스터 항목이 206개가 아닙니다: ${items.length}`);
-if (new Set(items.map((row) => [row.practice, row.department, row.menu, row.item].join("|"))).size !== 206) {
+if (items.length !== 204) throw new Error(`마스터 항목이 204개가 아닙니다: ${items.length}`);
+if (new Set(items.map((row) => [row.practice, row.department, row.menu, row.item].join("|"))).size !== 204) {
   throw new Error("마스터 항목 키가 중복되었습니다.");
 }
 if (new Set(roster.map((row) => row[1])).size !== roster.length) throw new Error("명단에 중복 학번이 있습니다.");

@@ -13,7 +13,7 @@ const EXPECTED_DEPARTMENT_COUNTS = {
   소아치과: 19,
   영상치의학과: 4,
   "원내생 진료센터": 14,
-  치주과: 24,
+  치주과: 22,
 };
 
 function loadDefaults() {
@@ -30,11 +30,11 @@ function loadMasterItems() {
   );
 }
 
-test("master config contains exactly 206 unique non-identifying item keys", () => {
+test("master config contains exactly 204 unique non-identifying item keys", () => {
   const items = loadMasterItems();
-  assert.equal(items.length, 206);
+  assert.equal(items.length, 204);
   const keys = new Set(items.map((row) => [row.practice, row.department, row.menu, row.item].join("|")));
-  assert.equal(keys.size, 206);
+  assert.equal(keys.size, 204);
   const counts = Object.fromEntries(
     Object.keys(EXPECTED_DEPARTMENT_COUNTS).map((department) => [
       department,

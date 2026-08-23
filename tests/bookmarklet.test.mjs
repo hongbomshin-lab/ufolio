@@ -109,6 +109,10 @@ test("buildBookmarklet embeds the OMS/prosthodontics allowlist and filters items
 
   assert.match(source, /RESTRICTED_DEPARTMENT_ITEMS/);
   assert.match(source, /shouldSendItem\(course\.dt_name, item\.menu_name, item\.pc_name\)/);
+  // 치주 기타 수술·단타 Assist 는 유폴 인증 비교에서 제외라 아예 전송하지 않는다.
+  assert.match(source, /EXCLUDED_DEPARTMENT_ITEMS/);
+  assert.match(source, /증례별 임상참여\|기타 수술/);
+  assert.match(source, /증례별 임상참여\|단타 Assist/);
   // 외과·보철만 제한 대상이어야 하고, 매핑된 항목 키가 목록에 있어야 한다.
   assert.match(source, /구강악안면외과:/);
   assert.match(source, /보철과:/);

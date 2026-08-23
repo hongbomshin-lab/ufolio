@@ -105,13 +105,24 @@ function bookmarkletRuntime(webAppUrl) {
         "기공|[임플란트]Laboratory case evaluation",
       ],
     };
+    // 치주는 기타 수술·단타 Assist 를 유폴 인증 비교에서 아예 빼기로 했다(케이스장 결정).
+    // 마스터항목에서도 지워진 항목이라, 전송에 섞이면 제출 전체가 거부되므로 여기서 걸러낸다.
+    const EXCLUDED_DEPARTMENT_ITEMS = {
+      치주과: ["증례별 임상참여|기타 수술", "증례별 임상참여|단타 Assist"],
+    };
     const itemKeyText = (value) => String(value ?? "").trim().replace(/\s+/g, " ");
     const restrictedByDepartment = new Map(
       Object.entries(RESTRICTED_DEPARTMENT_ITEMS).map(([department, list]) => [department, new Set(list)]),
     );
+    const excludedByDepartment = new Map(
+      Object.entries(EXCLUDED_DEPARTMENT_ITEMS).map(([department, list]) => [department, new Set(list)]),
+    );
     const shouldSendItem = (departmentName, menuName, itemName) => {
+      const key = `${itemKeyText(menuName)}|${itemKeyText(itemName)}`;
+      const excluded = excludedByDepartment.get(itemKeyText(departmentName));
+      if (excluded && excluded.has(key)) return false;
       const allowed = restrictedByDepartment.get(itemKeyText(departmentName));
-      return !allowed || allowed.has(`${itemKeyText(menuName)}|${itemKeyText(itemName)}`);
+      return !allowed || allowed.has(key);
     };
     const parseIdentity = (text) => {
       const regex = /([가-힣A-Za-z][가-힣A-Za-z\s·]{0,39}?)\s*\(\s*(\d{4}-\d{5})\s*\)/g;
