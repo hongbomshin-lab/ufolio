@@ -76,12 +76,13 @@ function case_defaultMappings_() {
     case_mapping_("CONS_OBS_CHART", "승인", "CONS_SCORE", "Observation Charting", "VALUE(C)", "", "VALUE(C)", case_target_(cons, "증례별 임상참여", "Observation (Charting) case"), "점수", "SUM", 70, "점수판 관찰 점수"),
     case_mapping_("CONS_OBS_ENDO", "승인", "CONS_SCORE", "Observation Endodontics", "VALUE(D)", "", "VALUE(D)", case_target_(cons, "증례별 임상참여", "Observation (Endodontics) case"), "점수", "SUM", 70, "점수판 관찰 점수"),
     case_mapping_("CONS_OBS_OPER", "승인", "CONS_SCORE", "Observation Operative", "VALUE(E)", "", "VALUE(E)", case_target_(cons, "증례별 임상참여", "Observation (Operative) case"), "점수", "SUM", 70, "점수판 관찰 점수"),
+    // 보존 수술 점수는 유폴 인증 점수판 F열(Observation (Surgery), 2행 "총합 (8)")을 기준으로 삼는다.
+    case_mapping_("CONS_OBS_SURG_SCORE", "승인", "CONS_SCORE", "Observation Surgery", "VALUE(F)", "", "VALUE(F)", case_target_(cons, "증례별 임상참여", "Observation (Surgery) case"), "점수", "SUM", 90, "유폴 인증 점수판 F열 우선"),
     (function () {
-      var row = case_mapping_("CONS_OBS_SURG_SCORE", "보류", "CONS_SCORE", "Observation Surgery", "VALUE(F)", "", "VALUE(F)", case_target_(cons, "증례별 임상참여", "Observation (Surgery) case"), "점수", "SUM", 70, "전용 수술 현황 W열과 같은 실적이므로 중복 방지를 위해 비활성");
+      var row = case_mapping_("CONS_OBS_SURG", "보류", "CONS_SURGERY", "보존 수술 누적", "VALUE(W)", "", "VALUE(W)", case_target_(cons, "증례별 임상참여", "Observation (Surgery) case"), "점수", "SUM", 70, "점수판 F열과 같은 실적이므로 중복 방지를 위해 비활성");
       row[1] = "N";
       return row;
     })(),
-    case_mapping_("CONS_OBS_SURG", "승인", "CONS_SURGERY", "보존 수술 누적", "VALUE(W)", "", "VALUE(W)", case_target_(cons, "증례별 임상참여", "Observation (Surgery) case"), "점수", "SUM", 90, "전용 수술표 우선"),
     case_mapping_("CONS_ASSIST", "승인", "CONS_SCORE", "단타 assist 보존과", "VALUE(G)", "", "VALUE(G)", case_target_(cons, "증례별 임상참여", "단타 assist(보존과)"), "점수", "SUM", 70, ""),
     case_mapping_("CONS_CENTER_ASSIST", "승인", "CONS_SCORE", "단타 assist 원내생센터", "VALUE(H)", "", "VALUE(H)", case_target_(cons, "증례별 임상참여", "단타 assist(원내생진료센터 assist)"), "점수", "SUM", 70, ""),
     case_mapping_("CONS_RESIN_STAGE", "승인", "CONS_SCORE", "Resin 완료 점수", "VALUE(I)", "", "VALUE(I)", [case_target_(cons, "증례별 임상참여", "Composite restoration(3급/4급)(practice)"), case_target_(cons, "증례별 임상참여", "Composite restoration(practice)"), case_target_(cons, "증례별 임상참여", "Composite restortion(2급)(Practice)")].join("\n"), "점수", "SUM", 50, "세 레진 practice 항목 점수 합계와 비교"),

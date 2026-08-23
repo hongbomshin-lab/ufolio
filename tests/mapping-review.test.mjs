@@ -47,8 +47,16 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.equal(mappings.CONS_ENDO_STAGE[2], "승인");
   assert.equal(mappings.CONS_ENDO_STAGE[9], "점수");
   assert.match(mappings.CONS_ENDO_STAGE[8], /Endodontic treatment\(practice\)/);
-  assert.equal(mappings.CONS_OBS_SURG_SCORE[1], "N");
-  assert.equal(mappings.CONS_OBS_SURG_SCORE[2], "보류");
+  // 보존 수술 점수는 점수판 F열이 기준이고, 전용 수술표 W열은 중복이라 비활성이다.
+  assert.equal(mappings.CONS_OBS_SURG_SCORE[1], "Y");
+  assert.equal(mappings.CONS_OBS_SURG_SCORE[2], "승인");
+  assert.equal(mappings.CONS_OBS_SURG_SCORE[3], "CONS_SCORE");
+  assert.equal(mappings.CONS_OBS_SURG_SCORE[5], "VALUE(F)");
+  assert.equal(mappings.CONS_OBS_SURG_SCORE[7], "VALUE(F)");
+  assert.equal(mappings.CONS_OBS_SURG_SCORE[9], "점수");
+  assert.equal(mappings.CONS_OBS_SURG[1], "N");
+  assert.equal(mappings.CONS_OBS_SURG[2], "보류");
+  assert.ok(Number(mappings.CONS_OBS_SURG_SCORE[11]) > Number(mappings.CONS_OBS_SURG[11]));
 
   // 치주 flap/implant 는 누적(E·H)이 아니라 3-2 완료(C·F)로 비교한다. 예정(D·G)은 예정식에만 남는다.
   assert.equal(mappings.PERIO_FLAP[5], "VALUE(C)");
