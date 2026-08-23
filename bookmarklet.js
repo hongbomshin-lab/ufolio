@@ -325,19 +325,36 @@ function bookmarkletRuntime(webAppUrl) {
           const status = panel.querySelector("#ufc-status");
           status.textContent = `전송 중… (${items.length}개 항목)`;
           status.style.background = "#eff4ff";
+          // Content-Type text/plain 은 preflight 없는 단순 요청이라 Apps Script 응답을 그대로 읽을 수 있다.
+          // 서버가 저장을 거부하면(동기화 중 잠금, 명단 불일치 등) 그 사유가 여기로 온다.
           try {
-            await fetch(webAppUrl, {
+            const response = await fetch(webAppUrl, {
               method: "POST",
-              mode: "no-cors",
               headers: { "Content-Type": "text/plain;charset=UTF-8" },
               body: JSON.stringify(payload),
             });
-            status.textContent =
-              "전송 요청 완료 - 실제 저장 여부는 관리자 전송기록에서 확인하세요.";
-            status.style.background = "#ecfdf3";
+            let data = null;
+            try {
+              data = JSON.parse(await response.text());
+            } catch {
+              data = null;
+            }
+            if (data && data.ok) {
+              status.textContent = `전송 완료 - ${data.itemCount}개 항목이 저장되었습니다.`;
+              status.style.background = "#ecfdf3";
+            } else if (data && data.error) {
+              status.textContent = data.retryable
+                ? `저장되지 않았습니다: ${data.error}`
+                : `전송이 거부되었습니다: ${data.error}`;
+              status.style.background = "#fef3f2";
+            } else {
+              status.textContent =
+                "전송 요청은 보냈지만 저장 결과를 확인하지 못했습니다. 잠시 뒤 '다시 전송'을 눌러주세요. (다시 보내도 같은 실습차수를 덮어써서 안전합니다)";
+              status.style.background = "#fffaeb";
+            }
           } catch (error) {
-            status.textContent = `전송 요청 실패: ${error.message}`;
-            status.style.background = "#fef3f2";
+            status.textContent = `전송 결과를 확인하지 못했습니다 (${error.message}). 저장 여부가 확실하지 않으니 잠시 뒤 '다시 전송'을 눌러주세요.`;
+            status.style.background = "#fffaeb";
           }
         };
 

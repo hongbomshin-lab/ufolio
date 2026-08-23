@@ -83,8 +83,11 @@ test("buildBookmarklet creates one universal u-folio collector", () => {
   const source = decodeURIComponent(result.slice("javascript:".length));
   assert.match(source, /dent_summary\/list/);
   assert.match(source, /dent_summary\/getSummaryData/);
-  assert.match(source, /mode:\s*["']no-cors["']/);
-  assert.match(source, /전송 요청 완료/);
+  // no-cors 로 보내면 저장 실패(잠금·명단 불일치)를 학생이 알 수 없다. 응답을 읽어 결과를 보여줘야 한다.
+  assert.doesNotMatch(source, /no-cors/);
+  assert.match(source, /전송 완료 - /);
+  assert.match(source, /data\.retryable/);
+  assert.match(source, /다시 전송'을 눌러주세요/);
   assert.doesNotMatch(source, /login_id|달신 아이디|2024-12345/);
 });
 

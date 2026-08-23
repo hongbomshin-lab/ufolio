@@ -22,6 +22,10 @@ var SYS_HIDDEN_SHEETS = [
   "마스터항목", "학생명단", "RAW", "전송기록", "설정", "차트데이터", "사용안내",
 ];
 
+// 화면 구성 적용 때 현황시트연결에서 코드가 덮어쓰지 않는 열:
+// E 스프레드시트 URL(4), M 마지막 성공(12), N 상태(13), O 오류(14).
+var SYS_CONNECTION_PRESERVED_COLUMNS = [4, 12, 13, 14];
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("유폴리오 통합관리")
@@ -43,7 +47,7 @@ function applyUnifiedWorkbookLayout() {
   spreadsheet.setSpreadsheetTimeZone("Asia/Seoul");
   setupSheets();
   sys_ensureIntegrationSheets_(spreadsheet);
-  sys_seedRows_(spreadsheet.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS, case_defaultConnections_(), 0);
+  sys_seedRows_(spreadsheet.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS, case_defaultConnections_(), 0, SYS_CONNECTION_PRESERVED_COLUMNS);
   sys_seedRows_(spreadsheet.getSheetByName(CASE_MAPPING_SHEET), CASE_MAPPING_HEADERS, case_defaultMappings_(), 0);
   sys_seedMeasurementSettings_(spreadsheet);
   sys_applyAdminFormats_(spreadsheet);
@@ -87,7 +91,7 @@ function migrateAdminWorkbookIntoSite() {
 function seedIntegrationDefaults() {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   sys_ensureIntegrationSheets_(spreadsheet);
-  sys_seedRows_(spreadsheet.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS, case_defaultConnections_(), 0);
+  sys_seedRows_(spreadsheet.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS, case_defaultConnections_(), 0, SYS_CONNECTION_PRESERVED_COLUMNS);
   sys_seedRows_(spreadsheet.getSheetByName(CASE_MAPPING_SHEET), CASE_MAPPING_HEADERS, case_defaultMappings_(), 0);
   sys_seedMeasurementSettings_(spreadsheet);
   sys_applyAdminFormats_(spreadsheet);
@@ -310,24 +314,36 @@ function removeRefreshTriggers() {
   });
 }
 
-function sys_seedRows_(sheet, headers, seedRows, keyIndex) {
+function sys_seedRows_(sheet, headers, seedRows, keyIndex, preserveColumns) {
   if (!sheet) throw new Error("설정 시트가 없습니다: " + headers[0]);
   var existing = sheet.getLastRow() < 2 ? [] : sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
-  var merged = sys_mergeSeedRows_(existing, seedRows, keyIndex);
+  var merged = sys_mergeSeedRows_(existing, seedRows, keyIndex, preserveColumns);
   sys_replaceData_(sheet, headers, merged);
 }
 
-function sys_mergeSeedRows_(existingRows, seedRows, keyIndex) {
-  var seen = {};
-  var output = existingRows.filter(function (row) { return row[keyIndex] !== ""; }).map(function (row) {
-    seen[String(row[keyIndex])] = true;
-    return row.slice();
+// 기본(시드) 행은 코드가 기준이다: 같은 키의 기존 행을 시드값으로 갱신하되,
+// preserveColumns(관리자 입력·런타임 열, 예: 연결 URL·마지막 성공)는 기존 값을 남긴다.
+// 시드에 없는 키(관리자가 직접 추가한 행)는 그대로 뒤에 보존한다.
+function sys_mergeSeedRows_(existingRows, seedRows, keyIndex, preserveColumns) {
+  var existingByKey = {};
+  existingRows.forEach(function (row) {
+    if (row[keyIndex] !== "") existingByKey[String(row[keyIndex])] = row;
   });
-  seedRows.forEach(function (row) {
+  var seeded = {};
+  var output = seedRows.map(function (row) {
     var key = String(row[keyIndex]);
-    if (seen[key]) return;
-    seen[key] = true;
-    output.push(row.slice());
+    seeded[key] = true;
+    var merged = row.slice();
+    var existing = existingByKey[key];
+    if (existing) {
+      (preserveColumns || []).forEach(function (columnIndex) {
+        merged[columnIndex] = existing[columnIndex];
+      });
+    }
+    return merged;
+  });
+  existingRows.forEach(function (row) {
+    if (row[keyIndex] !== "" && !seeded[String(row[keyIndex])]) output.push(row.slice());
   });
   return output;
 }

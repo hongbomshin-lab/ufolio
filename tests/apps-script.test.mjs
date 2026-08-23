@@ -10,6 +10,37 @@ function loadReceiver() {
   return context;
 }
 
+test("doPost returns a retryable error without touching sheets when the lock is busy", () => {
+  const context = vm.createContext({
+    console,
+    LockService: {
+      getScriptLock: () => ({
+        tryLock: () => false,
+        releaseLock: () => {
+          throw new Error("얻지 못한 잠금을 해제하면 안 됩니다");
+        },
+      }),
+    },
+    ContentService: {
+      MimeType: { JSON: "JSON" },
+      createTextOutput(text) {
+        return { text, setMimeType() { return this; } };
+      },
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => {
+        throw new Error("잠금 없이 시트에 접근하면 안 됩니다");
+      },
+    },
+  });
+  vm.runInContext(readFileSync("apps-script/Code.gs", "utf8"), context, { filename: "apps-script/Code.gs" });
+  const output = context.doPost({ postData: { contents: JSON.stringify(validPayload()) } });
+  const data = JSON.parse(output.text);
+  assert.equal(data.ok, false);
+  assert.equal(data.retryable, true);
+  assert.match(data.error, /동기화 작업 중/);
+});
+
 function validPayload(overrides = {}) {
   return {
     schemaVersion: 1,

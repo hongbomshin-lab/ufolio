@@ -161,18 +161,24 @@ test("prosthodontic cross-check mappings mirror PROS targets with lower priority
   assert.equal(mappings.PROS_CHART_32[2], "보류");
 });
 
-test("seed merge keeps existing rows and appends only missing defaults", () => {
+test("seed merge updates seed-owned columns, preserves admin columns and custom rows", () => {
   const setup = loadScripts("apps-script/SystemSetup.gs");
   const existing = [
-    ["KNOWN", "edited-by-admin"],
-    ["CUSTOM", "keep"],
+    ["KNOWN", "old-flag", "admin-url"],
+    ["CUSTOM", "keep", "keep-url"],
   ];
   const seeds = [
-    ["KNOWN", "default"],
-    ["ADDED", "default"],
+    ["KNOWN", "new-flag", ""],
+    ["ADDED", "default", ""],
   ];
+  // 시드 열(활성·검토상태 등)은 코드값으로 갱신되고, 보존 열(URL 등)은 기존 값이 남는다.
+  assert.deepEqual(
+    Array.from(setup.sys_mergeSeedRows_(existing, seeds, 0, [2]), (row) => Array.from(row)),
+    [["KNOWN", "new-flag", "admin-url"], ["ADDED", "default", ""], ["CUSTOM", "keep", "keep-url"]],
+  );
+  // preserveColumns 를 안 주면 시드 행은 전체가 코드 기준이 된다(항목매핑).
   assert.deepEqual(
     Array.from(setup.sys_mergeSeedRows_(existing, seeds, 0), (row) => Array.from(row)),
-    [["KNOWN", "edited-by-admin"], ["CUSTOM", "keep"], ["ADDED", "default"]],
+    [["KNOWN", "new-flag", ""], ["ADDED", "default", ""], ["CUSTOM", "keep", "keep-url"]],
   );
 });

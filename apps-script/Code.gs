@@ -69,10 +69,18 @@ function ensureSheet_(spreadsheet, name, headers) {
 }
 
 function doPost(e) {
-  var services = createSheetServices_();
   var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) {
+    // 잠금 없이 시트를 쓰면 다른 실행과 경합하므로, 로그 없이 즉시 거절하고
+    // 학생 화면(북마클릿)에 재전송 안내를 보낸다. 재전송은 같은 실습차수를 덮어써서 안전하다.
+    return jsonOutput_({
+      ok: false,
+      retryable: true,
+      error: "지금 서버가 동기화 작업 중입니다. 1~2분 뒤 '다시 전송'을 눌러주세요.",
+    });
+  }
   try {
+    var services = createSheetServices_();
     var payload;
     try {
       payload = JSON.parse((e && e.postData && e.postData.contents) || "");
@@ -386,7 +394,10 @@ function compactRawRows_(values) {
 // 이미 쌓여 있는 RAW의 과거 제출분을 1회 정리한다. (이후 제출은 doPost가 자동으로 최신만 유지)
 function compactRawSheet() {
   var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) {
+    SpreadsheetApp.getActiveSpreadsheet().toast("다른 작업(동기화 또는 제출 처리)이 실행 중입니다. 잠시 뒤 다시 실행하세요.");
+    return;
+  }
   try {
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var raw = spreadsheet.getSheetByName(RAW_SHEET);

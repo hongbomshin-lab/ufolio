@@ -493,15 +493,18 @@ function case_liveServices_(spreadsheet) {
 }
 
 function refreshIntegratedData() {
+  // 1단계(잠금 없음): 로컬 시트를 읽고 외부 원본 14곳을 순회하며 비교 결과를 계산한다.
+  // 이 구간이 몇 분씩 걸리므로 잠금을 잡지 않아야 학생 제출(doPost)이 막히지 않는다.
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var services = case_liveServices_(spreadsheet);
+  var result = case_refreshAll_(services);
+  var latest = services.getLatestUfolio();
+  var latestRows = Object.keys(latest).map(function (key) { return latest[key].raw; }).sort(function (left, right) { return new Date(right[0]).getTime() - new Date(left[0]).getTime(); });
+  // 2단계(잠금): 결과를 시트에 쓰는 짧은 구간만 잠근다. 제출 처리 뒤에 순서대로 실행된다.
   var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  lock.waitLock(120000);
   try {
-    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    var services = case_liveServices_(spreadsheet);
-    var result = case_refreshAll_(services);
     case_replaceOutput_(spreadsheet.getSheetByName(CASE_SNAPSHOT_SHEET), CASE_SNAPSHOT_HEADERS, result.snapshotRows.map(case_snapshotArray_));
-    var latest = services.getLatestUfolio();
-    var latestRows = Object.keys(latest).map(function (key) { return latest[key].raw; }).sort(function (left, right) { return new Date(right[0]).getTime() - new Date(left[0]).getTime(); });
     case_replaceOutput_(spreadsheet.getSheetByName(CASE_UFOLIO_LATEST_SHEET), RAW_HEADERS, latestRows);
     var comparisonSheet = spreadsheet.getSheetByName(CASE_COMPARISON_SHEET);
     case_replaceOutput_(comparisonSheet, CASE_COMPARISON_HEADERS, result.comparisonRows.map(function (row) {
