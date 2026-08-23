@@ -54,7 +54,7 @@ function case_defaultConnections_() {
     ["ORTHO", "Y", "교정과", "[교정] 케이스 현황", "", "현황 시트", "A", "B", 4, "", 60, "CONFIG", "", "URL입력필요", ""],
     ["RADIO", "Y", "영상치의학과", "[영상] 케이스 현황", "", "💀케이스현황", "A", "B", 5, "", 60, "CONFIG", "", "URL입력필요", ""],
     ["PROS_TOTAL", "Y", "보철과", "[보철] 개인별토탈 Total 현황", "", "Total 현황시트", "A", "B", 4, "", 50, "CONFIG", "", "URL입력필요", ""],
-    ["PROS_CHART", "Y", "보철과", "[보철] 차팅 케이스 현황", "", "시트1", "A", "B", 4, 95, 50, "CONFIG", "", "URL입력필요", "96행부터는 평균 등 요약행"],
+    ["PROS_CHART", "N", "보철과", "[보철] 차팅 케이스 현황", "", "시트1", "A", "B", 4, 95, 50, "CONFIG", "", "보류", "실시간 현황조사용이라 비교에 쓰지 않는다"],
   ];
 }
 
@@ -173,6 +173,10 @@ function case_defaultMappings_() {
     case_mapping_("PROS_TOTAL_FIXED", "승인", "PROS_TOTAL", "고정 누적(토탈시트)", "VALUE(F)", "", "VALUE(F)", case_target_(pros, "Total Case", "Total case evaluation (고정성)"), "승인수", "SUM", 50, "보철비교용"),
     case_mapping_("PROS_TOTAL_IMPLANT", "승인", "PROS_TOTAL", "임플 누적(토탈시트)", "VALUE(H)", "", "VALUE(H)", case_target_(pros, "Total Case", "Total case evaluation (Implant)"), "승인수", "SUM", 50, "보철비교용"),
     case_mapping_("PROS_TOTAL_IMPLANT_ASSIST", "승인", "PROS_TOTAL", "임수 누적(토탈시트)", "VALUE(I)", "", "VALUE(I)", case_target_(pros, "증례별 임상참여", "03. Implant assist"), "승인수", "SUM", 50, "보철비교용"),
-    case_mapping_("PROS_CHART_32", "승인", "PROS_CHART", "3-2 차팅(차팅시트)", "VALUE(C)", "", "VALUE(C)", case_target_(pros, "증례별 임상참여", "22. Charting"), "승인수", "SUM", 50, "보철비교용"),
+    (function () {
+      var row = case_mapping_("PROS_CHART_32", "보류", "PROS_CHART", "3-2 차팅(차팅시트)", "VALUE(C)", "", "VALUE(C)", case_target_(pros, "증례별 임상참여", "22. Charting"), "승인수", "SUM", 50, "차팅 케이스 현황은 실시간 현황조사용이라 비교하지 않는다");
+      row[1] = "N";
+      return row;
+    })(),
   ];
 }

@@ -144,7 +144,6 @@ test("prosthodontic cross-check mappings mirror PROS targets with lower priority
     ["PROS_FIXED", "PROS_TOTAL_FIXED", "VALUE(F)"],
     ["PROS_IMPLANT", "PROS_TOTAL_IMPLANT", "VALUE(H)"],
     ["PROS_IMPLANT_ASSIST", "PROS_TOTAL_IMPLANT_ASSIST", "VALUE(I)"],
-    ["PROS_CHARTING", "PROS_CHART_32", "VALUE(C)"],
   ];
   for (const [left, right, expression] of pairs) {
     assert.equal(mappings[right][7], expression);
@@ -155,6 +154,11 @@ test("prosthodontic cross-check mappings mirror PROS targets with lower priority
     assert.equal(mappings[right][2], "승인");
     assert.equal(mappings[right][1], "Y");
   }
+  // 차팅은 현황조사(PROS S열)와 유폴리오만 비교한다. 차팅 케이스 현황 시트는 실시간 현황조사용이라 비활성.
+  assert.equal(mappings.PROS_CHARTING[1], "Y");
+  assert.equal(mappings.PROS_CHARTING[2], "승인");
+  assert.equal(mappings.PROS_CHART_32[1], "N");
+  assert.equal(mappings.PROS_CHART_32[2], "보류");
 });
 
 test("seed merge keeps existing rows and appends only missing defaults", () => {

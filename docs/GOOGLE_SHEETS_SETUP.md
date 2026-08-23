@@ -39,11 +39,11 @@
 3. 파일명 대신 `소스키`와 `시트명`을 보고 맞는 행에 넣습니다. 같은 파일을 사용하는 두 소스 행에는 같은 URL을 넣습니다.
 4. 원본 시트의 셀·수식·탭명은 수정하지 않습니다.
 
-URL이 들어가야 하는 소스키: `CONS_SCORE`, `PED_CHART`, `PERIO`, `OM`, `EXT`, `PATH`, `PROS`, `OMS`, `OMS_STAGE`, `ORTHO`, `RADIO`, `PROS_TOTAL`, `PROS_CHART`
+URL이 들어가야 하는 소스키: `CONS_SCORE`, `PED_CHART`, `PERIO`, `OM`, `EXT`, `PATH`, `PROS`, `OMS`, `OMS_STAGE`, `ORTHO`, `RADIO`, `PROS_TOTAL`
 
-URL이 필요 없는 소스키: `IMPLANT`, `CONS_SURGERY` (둘 다 비활성이라 읽지 않습니다)
+URL이 필요 없는 소스키: `IMPLANT`, `CONS_SURGERY`, `PROS_CHART` (셋 다 비활성이라 읽지 않습니다)
 
-`IMPLANT`는 과거 학년·예시 자료로 확인되어, `CONS_SURGERY`는 보존 수술 점수를 `CONS_SCORE`(점수판) F열에서 받게 되어 기본적으로 `N`(비활성), `보류`입니다. 정상 상태는 소스 15개 중 활성 13개 + 비활성 2개입니다.
+`IMPLANT`는 과거 학년·예시 자료로 확인되어, `CONS_SURGERY`는 보존 수술 점수를 `CONS_SCORE`(점수판) F열에서 받게 되어, `PROS_CHART`는 실시간 현황조사용이라 비교에 쓰지 않게 되어 기본적으로 `N`(비활성), `보류`입니다. 정상 상태는 소스 15개 중 활성 12개 + 비활성 3개입니다.
 
 ## 4. 평소에 보는 시트 (전부 4개)
 

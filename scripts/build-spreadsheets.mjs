@@ -60,7 +60,7 @@ const measurementHeaders = ["실습차수", "과", "메뉴/구분", "항목", "�
 const unmappedHeaders = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
 const diagnosticHeaders = ["시각", "소스키", "행", "상태", "상세"];
 const syncLogHeaders = ["시각", "정상 소스", "실패 소스", "현황 집계", "비교 건수", "상태"];
-const prosCrossHeaders = ["출석번호", "학번", "이름", "항목", "현황조사값", "토탈·차팅시트값", "유폴리오값", "상태"];
+const prosCrossHeaders = ["출석번호", "학번", "이름", "항목", "현황조사값", "개인별토탈값", "유폴리오값", "상태"];
 
 function parseRoster(text) {
   return text.trim().split(/\r?\n/).slice(1).filter(Boolean).map((line) => {

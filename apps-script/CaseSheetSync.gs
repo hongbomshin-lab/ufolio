@@ -19,14 +19,14 @@ var CASE_COMPARISON_HEADERS = [
   "제출건수", "승인수", "미승인", "환자수", "점수", "최신 유폴 인증",
 ];
 var CASE_MEASUREMENT_HEADERS = ["실습차수", "과", "메뉴/구분", "항목", "측정값"];
-var CASE_PROS_CROSS_HEADERS = ["출석번호", "학번", "이름", "항목", "현황조사값", "토탈·차팅시트값", "유폴리오값", "상태"];
-// 보철비교: 왼쪽=기존 현황조사(PROS), 오른쪽=개인별토탈(PROS_TOTAL)·차팅(PROS_CHART) 시트.
+var CASE_PROS_CROSS_HEADERS = ["출석번호", "학번", "이름", "항목", "현황조사값", "개인별토탈값", "유폴리오값", "상태"];
+// 보철비교: 왼쪽=기존 현황조사(PROS), 오른쪽=개인별토탈(PROS_TOTAL) 시트. 두 값 모두 예정 포함 누적이다.
+// 차팅 케이스 현황(PROS_CHART) 시트는 실시간 현황조사용이라 비교하지 않는다.
 var CASE_PROS_CROSS_PAIRS = [
   { label: "가철 누적", left: "PROS_REMOVABLE", right: "PROS_TOTAL_REMOVABLE" },
   { label: "고정 누적", left: "PROS_FIXED", right: "PROS_TOTAL_FIXED" },
   { label: "임플 누적", left: "PROS_IMPLANT", right: "PROS_TOTAL_IMPLANT" },
   { label: "임수 누적", left: "PROS_IMPLANT_ASSIST", right: "PROS_TOTAL_IMPLANT_ASSIST" },
-  { label: "차팅(3-2)", left: "PROS_CHARTING", right: "PROS_CHART_32" },
 ];
 var CASE_UNMAPPED_HEADERS = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
 var CASE_DIAGNOSTIC_HEADERS = ["시각", "소스키", "행", "상태", "상세"];
@@ -258,7 +258,7 @@ function case_refreshAll_(services) {
   };
 }
 
-// 보철비교: 현황조사 시트와 개인별토탈·차팅 시트의 같은 항목을 나란히 비교하고,
+// 보철비교: 현황조사 시트와 개인별토탈 시트의 같은 항목을 나란히 비교하고,
 // 참고용으로 해당 항목의 유폴리오 값(스냅샷의 측정값 기준)을 붙인다.
 function case_prosCrossRows_(snapshotRows, latestByKey) {
   var relevant = {};
