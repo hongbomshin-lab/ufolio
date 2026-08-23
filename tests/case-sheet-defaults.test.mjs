@@ -45,7 +45,7 @@ test("master config contains exactly 206 unique non-identifying item keys", () =
   assert.equal(items.some((row) => /\b\d{6,8}\b/.test(row.item)), false);
 });
 
-test("default connections cover fourteen active sources and one pending implant source", () => {
+test("default connections cover thirteen active sources and two inactive ones", () => {
   const defaults = loadDefaults();
   const rows = defaults.case_defaultConnections_();
   const objects = rows.map((row) => Object.fromEntries(defaults.CASE_CONNECTION_HEADERS.map((header, index) => [header, row[index]])));
@@ -55,8 +55,11 @@ test("default connections cover fourteen active sources and one pending implant 
     "PROS", "PROS_CHART", "PROS_TOTAL", "RADIO",
   ].sort());
   assert.equal(new Set(keys).size, 15);
-  assert.equal(objects.filter((row) => row["소스키"] !== "IMPLANT").every((row) => row["활성"] === "Y"), true);
-  assert.equal(objects.find((row) => row["소스키"] === "IMPLANT")["활성"], "N");
+  // IMPLANT 는 과거 학년 자료라서, CONS_SURGERY 는 수술 점수를 점수판 F열에서 받게 되어 비활성이다.
+  const inactive = ["IMPLANT", "CONS_SURGERY"];
+  assert.equal(objects.filter((row) => !inactive.includes(row["소스키"])).every((row) => row["활성"] === "Y"), true);
+  assert.equal(objects.filter((row) => inactive.includes(row["소스키"])).every((row) => row["활성"] === "N"), true);
+  assert.equal(objects.filter((row) => row["활성"] === "Y").length, 13);
   assert.equal(objects.every((row) => row["스프레드시트 URL"] === ""), true);
   assert.equal(objects.every((row) => /^[A-Z]{1,3}$/.test(row["출석번호 열"]) && /^[A-Z]{1,3}$/.test(row["이름 열"])), true);
   assert.equal(objects.every((row) => Number.isInteger(row["데이터 시작행"]) && row["데이터 시작행"] >= 2), true);
