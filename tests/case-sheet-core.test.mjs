@@ -117,6 +117,37 @@ test("U-FOLIO aggregation distinguishes a missing target from a blank selected m
   assert.equal(missingTarget.targetFound, false);
 });
 
+test("U-FOLIO aggregation exposes an intentionally uncollected score as 안받음", () => {
+  const core = loadCore();
+  const target = "3학년 치의학 임상실습 2|치주과|증례별 임상참여|Flap Assist";
+  const latest = {
+    [`2024-00001|${target}`]: {
+      approvedCount: 4,
+      patientCount: 2,
+      score: "안받음",
+      scoreRaw: "안받음",
+      pendingCount: 1,
+    },
+  };
+  const approval = core.case_aggregateUfolio_({
+    ufolioTargets: target,
+    measurement: "승인수",
+    aggregation: "SUM",
+  }, latest, "2024-00001");
+  assert.equal(approval.found, true);
+  assert.equal(approval.value, 4);
+  assert.equal(approval.metrics["점수"], "안받음");
+
+  const score = core.case_aggregateUfolio_({
+    ufolioTargets: target,
+    measurement: "점수",
+    aggregation: "SUM",
+  }, latest, "2024-00001");
+  assert.equal(score.found, false);
+  assert.equal(score.unavailable, true);
+  assert.equal(score.metrics["점수"], "안받음");
+});
+
 test("name normalization removes spacing variants", () => {
   const core = loadCore();
   assert.equal(core.case_normalizeName_("  홍  길동 "), "홍길동");

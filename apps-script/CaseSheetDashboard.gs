@@ -103,6 +103,7 @@ function dash_buildMatrix_(items, students, latestByKey, settings, submittedAt) 
       var record = latestByKey[case_ufolioKey_(String(student.studentId), [entry.practice, entry.department, entry.menu, entry.item])];
       if (!record) return "";
       var value = case_recordMetric_(record, measurement);
+      if (value === "안받음") return "안받음";
       if (case_isBlank_(value)) return "";
       var number = case_numericValue_(value);
       sum += number;

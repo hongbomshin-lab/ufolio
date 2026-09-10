@@ -165,6 +165,74 @@ test("processSubmission_ preserves unset score separately from zero", () => {
   assert.equal(state.rawRows[0][13], "");
 });
 
+test("processSubmission_ discards protected scores but keeps the other metrics", () => {
+  const receiver = loadReceiver();
+  const protectedItem = {
+    practiceName: "3학년 치의학 임상실습 2",
+    departmentName: "치주과",
+    menuName: "증례별 임상참여",
+    itemName: "Flap Assist",
+    approvedCount: 4,
+    pendingCount: 2,
+    patientCount: 3,
+    score: 999,
+    scoreRaw: "999",
+  };
+  const { services, state } = fakeServices(
+    undefined,
+    [["Y", protectedItem.practiceName, protectedItem.departmentName, protectedItem.menuName, protectedItem.itemName, "N", "승인수", ""]],
+  );
+
+  receiver.processSubmission_(validPayload({ items: [protectedItem] }), services);
+
+  assert.deepEqual(Array.from(state.rawRows[0].slice(9, 14)), [4, 3, "안받음", "안받음", 2]);
+});
+
+test("receiver score policy covers exactly the requested eight items", () => {
+  const receiver = loadReceiver();
+  assert.equal(Array.from(receiver.SCORE_NOT_COLLECTED_ITEM_KEYS).length, 8);
+  assert.equal(receiver.shouldCollectScore_("치주과", "증례별 임상참여", "Implant Assist"), false);
+  assert.equal(receiver.shouldCollectScore_("구강악안면외과", "증례별 임상참여", "수술실-기타"), false);
+  assert.equal(receiver.shouldCollectScore_("영상치의학과", "나절별 임상참여", "판독 토론 및 평가"), false);
+  assert.equal(receiver.shouldCollectScore_("치주과", "증례별 임상참여", "Scaling"), true);
+});
+
+test("redactScoreNotCollectedData removes historical protected scores only", () => {
+  const keys = [
+    ["치주과", "증례별 임상참여", "Flap Assist"],
+    ["보존과", "증례별 임상참여", "Observation case"],
+  ];
+  const scores = [[12.5, "12.5"], [6.5, "6.5"]];
+  const toasts = [];
+  let written = null;
+  const sheet = {
+    getLastRow: () => 3,
+    getRange: (_row, column) => {
+      if (column === 7) return { getValues: () => keys };
+      if (column === 12) return {
+        getValues: () => scores.map((row) => [...row]),
+        setValues: (rows) => { written = rows; },
+      };
+      throw new Error(`unexpected column ${column}`);
+    },
+  };
+  const spreadsheet = {
+    getSheetByName: () => sheet,
+    toast: (message) => toasts.push(message),
+  };
+  const context = vm.createContext({
+    console,
+    SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet },
+    LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
+  });
+  vm.runInContext(readFileSync("apps-script/Code.gs", "utf8"), context, { filename: "apps-script/Code.gs" });
+
+  context.redactScoreNotCollectedData();
+
+  assert.deepEqual(Array.from(written, (row) => Array.from(row)), [["안받음", "안받음"], [6.5, "6.5"]]);
+  assert.match(toasts[0], /기존 RAW 1개 항목/);
+});
+
 test("processSubmission_ stores formula-like text as literal text", () => {
   const receiver = loadReceiver();
   const payload = validPayload();

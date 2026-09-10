@@ -18,6 +18,27 @@ export function normalizeNullableNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+export const SCORE_NOT_COLLECTED_ITEM_KEYS = [
+  "치주과|증례별 임상참여|Flap Assist",
+  "치주과|증례별 임상참여|Implant Assist",
+  "구강악안면외과|증례별 임상참여|수술실-Malignant tumor and/or reconstruction surgery(free flap)",
+  "구강악안면외과|증례별 임상참여|수술실-Maxillofacial deformity and orthognathic surgery",
+  "구강악안면외과|증례별 임상참여|수술실-Cyst and benign tumor surgery",
+  "구강악안면외과|증례별 임상참여|수술실-Surgical extraction",
+  "구강악안면외과|증례별 임상참여|수술실-기타",
+  "영상치의학과|나절별 임상참여|판독 토론 및 평가",
+];
+
+function scorePolicyKey(item) {
+  return [item.departmentName, item.menuName, item.itemName]
+    .map((value) => String(value ?? "").trim().replace(/\s+/g, " "))
+    .join("|");
+}
+
+export function shouldCollectScore(item) {
+  return !SCORE_NOT_COLLECTED_ITEM_KEYS.includes(scorePolicyKey(item));
+}
+
 export function createSubmission({ identity, practices, items, now, uuid }) {
   return {
     schemaVersion: 1,
@@ -28,21 +49,26 @@ export function createSubmission({ identity, practices, items, now, uuid }) {
       studentId: identity.studentId,
     },
     practices: [...practices],
-    items: items.map((item) => ({
-      practiceName: item.practiceName,
-      departmentName: item.departmentName,
-      menuName: item.menuName,
-      itemName: item.itemName,
-      approvedCount: normalizeNullableNumber(item.approvedCount),
-      pendingCount: normalizeNullableNumber(item.pendingCount),
-      patientCount: normalizeNullableNumber(item.patientCount),
-      score: normalizeNullableNumber(item.score),
-      scoreRaw: item.scoreRaw == null ? "" : String(item.scoreRaw),
-    })),
+    items: items.map((item) => {
+      const clean = {
+        practiceName: item.practiceName,
+        departmentName: item.departmentName,
+        menuName: item.menuName,
+        itemName: item.itemName,
+        approvedCount: normalizeNullableNumber(item.approvedCount),
+        pendingCount: normalizeNullableNumber(item.pendingCount),
+        patientCount: normalizeNullableNumber(item.patientCount),
+      };
+      if (shouldCollectScore(item)) {
+        clean.score = normalizeNullableNumber(item.score);
+        clean.scoreRaw = item.scoreRaw == null ? "" : String(item.scoreRaw);
+      }
+      return clean;
+    }),
   };
 }
 
-function bookmarkletRuntime(webAppUrl) {
+function bookmarkletRuntime(webAppUrl, scoreNotCollectedItemKeys) {
   void (async () => {
     if (!location.hostname.includes("u-folio")) {
       alert("u-folio 사이트에 로그인한 상태에서 실행하세요.");
@@ -111,6 +137,13 @@ function bookmarkletRuntime(webAppUrl) {
       치주과: ["증례별 임상참여|기타 수술", "증례별 임상참여|단타 Assist"],
     };
     const itemKeyText = (value) => String(value ?? "").trim().replace(/\s+/g, " ");
+    const scoreNotCollected = new Set(
+      scoreNotCollectedItemKeys.map((key) => key.split("|").map(itemKeyText).join("|")),
+    );
+    const shouldCollectScore = (departmentName, menuName, itemName) =>
+      !scoreNotCollected.has(
+        [departmentName, menuName, itemName].map(itemKeyText).join("|"),
+      );
     const restrictedByDepartment = new Map(
       Object.entries(RESTRICTED_DEPARTMENT_ITEMS).map(([department, list]) => [department, new Set(list)]),
     );
@@ -271,7 +304,7 @@ function bookmarkletRuntime(webAppUrl) {
             for (const item of Array.isArray(detail.list) ? detail.list : []) {
               if (!shouldSendItem(course.dt_name, item.menu_name, item.pc_name)) continue;
               const scoreUnset = item.db_score === "N";
-              items.push({
+              const collectedItem = {
                 practiceName: String(course.curr_name ?? ""),
                 departmentName: String(course.dt_name ?? ""),
                 menuName: String(item.menu_name ?? ""),
@@ -280,9 +313,12 @@ function bookmarkletRuntime(webAppUrl) {
                 // submit_cnt = 승인 전 대기 건수. 유폴리오 화면의 "제출 건수"는 tot_cnt = app_cnt + submit_cnt (총 제출).
                 pendingCount: nullableNumber(item.submit_cnt),
                 patientCount: nullableNumber(item.sum_patient_cnt),
-                score: scoreUnset ? null : nullableNumber(item.cal_score),
-                scoreRaw: scoreUnset ? "미설정" : String(item.cal_score ?? ""),
-              });
+              };
+              if (shouldCollectScore(course.dt_name, item.menu_name, item.pc_name)) {
+                collectedItem.score = scoreUnset ? null : nullableNumber(item.cal_score);
+                collectedItem.scoreRaw = scoreUnset ? "미설정" : String(item.cal_score ?? "");
+              }
+              items.push(collectedItem);
             }
           } catch (error) {
             failures.push(`${course.dt_name}: ${error.message}`);
@@ -317,7 +353,7 @@ function bookmarkletRuntime(webAppUrl) {
           return `<div style="overflow:auto;max-height:42vh"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left">과</th><th style="text-align:left">항목</th><th>승인</th><th>승인대기</th><th>환자</th><th>점수</th></tr></thead><tbody>${rows
             .map(
               (item) =>
-                `<tr><td style="border-top:1px solid #e4e7ec;padding:4px">${escapeHtml(item.departmentName)}</td><td style="border-top:1px solid #e4e7ec;padding:4px">${escapeHtml(item.itemName)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.approvedCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.pendingCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.patientCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.scoreRaw)}</td></tr>`,
+                `<tr><td style="border-top:1px solid #e4e7ec;padding:4px">${escapeHtml(item.departmentName)}</td><td style="border-top:1px solid #e4e7ec;padding:4px">${escapeHtml(item.itemName)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.approvedCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.pendingCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.patientCount)}</td><td style="border-top:1px solid #e4e7ec;padding:4px;text-align:center">${escapeHtml(item.scoreRaw == null ? "안받음" : item.scoreRaw)}</td></tr>`,
             )
             .join("")}</tbody></table></div>`;
         };
@@ -390,6 +426,6 @@ export function buildBookmarklet(webAppUrl) {
     throw new Error("Apps Script 웹앱 URL이 올바르지 않습니다.");
   }
 
-  const source = `void (${bookmarkletRuntime.toString()})(${JSON.stringify(parsed.href)});`;
+  const source = `void (${bookmarkletRuntime.toString()})(${JSON.stringify(parsed.href)},${JSON.stringify(SCORE_NOT_COLLECTED_ITEM_KEYS)});`;
   return `javascript:${encodeURIComponent(source)}`;
 }

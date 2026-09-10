@@ -6,6 +6,8 @@ import {
   createSubmission,
   normalizeNullableNumber,
   parseIdentityText,
+  SCORE_NOT_COLLECTED_ITEM_KEYS,
+  shouldCollectScore,
 } from "../bookmarklet.js";
 
 test("parseIdentityText extracts one u-folio header identity", () => {
@@ -74,6 +76,48 @@ test("createSubmission preserves all score metrics", () => {
   });
 });
 
+test("createSubmission omits score fields for all no-score items", () => {
+  const items = SCORE_NOT_COLLECTED_ITEM_KEYS.map((key) => {
+    const [departmentName, menuName, itemName] = key.split("|");
+    return {
+      practiceName: "3학년 치의학 임상실습 2",
+      departmentName,
+      menuName,
+      itemName,
+      approvedCount: 3,
+      pendingCount: 2,
+      patientCount: 1,
+      score: 999,
+      scoreRaw: "999",
+    };
+  });
+  const payload = createSubmission({
+    identity: { name: "홍길동", studentId: "2024-12345" },
+    practices: ["3학년 치의학 임상실습 2"],
+    items,
+    now: () => "2026-08-06T00:00:00.000Z",
+    uuid: () => "11111111-1111-4111-8111-111111111111",
+  });
+
+  assert.equal(SCORE_NOT_COLLECTED_ITEM_KEYS.length, 8);
+  for (const item of payload.items) {
+    assert.equal(Object.hasOwn(item, "score"), false);
+    assert.equal(Object.hasOwn(item, "scoreRaw"), false);
+    assert.equal(item.approvedCount, 3);
+    assert.equal(item.pendingCount, 2);
+    assert.equal(item.patientCount, 1);
+    assert.equal(shouldCollectScore(item), false);
+  }
+  assert.equal(
+    shouldCollectScore({ departmentName: "보존과", menuName: "증례별 임상참여", itemName: "Observation case" }),
+    true,
+  );
+  assert.equal(
+    shouldCollectScore({ departmentName: "영상치의학과", menuName: "나절별 임상참여", itemName: "판독 토론 및 평가" }),
+    false,
+  );
+});
+
 test("buildBookmarklet creates one universal u-folio collector", () => {
   const result = buildBookmarklet(
     "https://script.google.com/macros/s/EXAMPLE_DEPLOYMENT/exec",
@@ -88,6 +132,8 @@ test("buildBookmarklet creates one universal u-folio collector", () => {
   assert.match(source, /전송 완료 - /);
   assert.match(source, /data\.retryable/);
   assert.match(source, /다시 전송'을 눌러주세요/);
+  assert.match(source, /scoreNotCollectedItemKeys/);
+  assert.match(source, /item\.scoreRaw == null \? "안받음"/);
   assert.doesNotMatch(source, /login_id|달신 아이디|2024-12345/);
 });
 

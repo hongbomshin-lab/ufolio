@@ -236,10 +236,11 @@ function case_refreshAll_(services) {
       measurement: row.measurement,
       aggregation: row.aggregation,
     }, latestByKey, row.studentId);
-    if (case_isBlank_(row.sourceValue) && !aggregated.found) return;
+    if (case_isBlank_(row.sourceValue) && !aggregated.found && !aggregated.unavailable) return;
     var comparisonStatus;
     if (row.stale || row.status === "원본노후") comparisonStatus = "원본노후";
     else if (row.status === "원본오류") comparisonStatus = "원본오류";
+    else if (aggregated.unavailable) comparisonStatus = "U-FOLIO측정값안받음";
     else if (!aggregated.found && aggregated.targetFound) comparisonStatus = "U-FOLIO측정값없음";
     else comparisonStatus = case_compareValues_(row.sourceValue, aggregated.found ? aggregated.value : "");
     comparisonRows.push(case_comparisonRow_(row, aggregated, comparisonStatus, latestSubmissionAt[row.studentId] || ""));
@@ -307,7 +308,7 @@ function case_prosCrossRows_(snapshotRows, latestByKey) {
 
 function case_comparisonRow_(row, aggregated, status, latestAuthAt) {
   var authenticated = !!(aggregated && aggregated.targetFound);
-  var ufolioValue = aggregated && aggregated.found ? aggregated.value : "";
+  var ufolioValue = aggregated && aggregated.unavailable ? "안받음" : (aggregated && aggregated.found ? aggregated.value : "");
   var metrics = (aggregated && aggregated.metrics) || {};
   // 유폴리오 화면의 "제출 건수" = 승인 + 승인대기 합(tot_cnt). RAW에는 미승인(submit_cnt)만 있으므로 여기서 합산한다.
   var approvedMetric = metrics["승인수"];
@@ -394,6 +395,7 @@ function case_latestUfolioFromRows_(rows) {
         approvedCount: row[9],
         patientCount: row[10],
         score: row[11],
+        scoreRaw: row[12],
         pendingCount: row[13],
         raw: row,
       };

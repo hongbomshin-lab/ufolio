@@ -3,6 +3,16 @@ var ROSTER_SHEET = "학생명단";
 var LOG_SHEET = "전송기록";
 var MASTER_SHEET = "마스터항목";
 var MAX_ITEMS = 5000;
+var SCORE_NOT_COLLECTED_ITEM_KEYS = [
+  "치주과|증례별 임상참여|Flap Assist",
+  "치주과|증례별 임상참여|Implant Assist",
+  "구강악안면외과|증례별 임상참여|수술실-Malignant tumor and/or reconstruction surgery(free flap)",
+  "구강악안면외과|증례별 임상참여|수술실-Maxillofacial deformity and orthognathic surgery",
+  "구강악안면외과|증례별 임상참여|수술실-Cyst and benign tumor surgery",
+  "구강악안면외과|증례별 임상참여|수술실-Surgical extraction",
+  "구강악안면외과|증례별 임상참여|수술실-기타",
+  "영상치의학과|나절별 임상참여|판독 토론 및 평가",
+];
 
 var RAW_HEADERS = [
   "수신시각",
@@ -233,7 +243,7 @@ function processSubmission_(payload, services) {
       safeCellText_(item.itemName),
       item.approvedCount == null ? "" : item.approvedCount,
       item.patientCount == null ? "" : item.patientCount,
-      item.score == null ? "" : item.score,
+      item.scoreRaw === "안받음" ? "안받음" : (item.score == null ? "" : item.score),
       safeCellText_(item.scoreRaw),
       item.pendingCount == null ? "" : item.pendingCount,
     ];
@@ -303,7 +313,7 @@ function validatePayload_(payload) {
     if (!item || typeof item !== "object") {
       throw new Error("항목 형식이 올바르지 않습니다.");
     }
-    return {
+    var clean = {
       practiceName: requiredText_(item.practiceName, "실습차수", 150),
       departmentName: requiredText_(item.departmentName, "과", 150),
       menuName: limitedText_(item.menuName, "메뉴/구분", 200),
@@ -311,9 +321,16 @@ function validatePayload_(payload) {
       approvedCount: nullableFiniteNumber_(item.approvedCount, "승인 수"),
       pendingCount: nullableFiniteNumber_(item.pendingCount, "승인대기 수"),
       patientCount: nullableFiniteNumber_(item.patientCount, "환자 수"),
-      score: nullableFiniteNumber_(item.score, "점수"),
-      scoreRaw: limitedText_(item.scoreRaw, "점수 원문", 100),
     };
+    // 개인정보 최소화 정책 대상은 구버전 북마클릿이 점수를 보내더라도 서버에서 폐기한다.
+    if (shouldCollectScore_(clean.departmentName, clean.menuName, clean.itemName)) {
+      clean.score = nullableFiniteNumber_(item.score, "점수");
+      clean.scoreRaw = limitedText_(item.scoreRaw, "점수 원문", 100);
+    } else {
+      clean.score = null;
+      clean.scoreRaw = "안받음";
+    }
+    return clean;
   });
 
   return {
@@ -370,6 +387,11 @@ function rawKeyText_(value) {
   return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
 }
 
+function shouldCollectScore_(departmentName, menuName, itemName) {
+  var key = [departmentName, menuName, itemName].map(rawKeyText_).join("|");
+  return SCORE_NOT_COLLECTED_ITEM_KEYS.indexOf(key) < 0;
+}
+
 function rawGroupKey_(row) {
   return rawKeyText_(row[3]) + "|" + rawKeyText_(row[5]); // 학번|실습차수
 }
@@ -411,6 +433,37 @@ function compactRawSheet() {
     raw.getRange(2, 1, values.length, RAW_HEADERS.length).clearContent();
     if (kept.length > 0) raw.getRange(2, 1, kept.length, RAW_HEADERS.length).setValues(kept);
     spreadsheet.toast("RAW " + values.length + "행 중 최신 " + kept.length + "행만 남겼습니다.");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 정책 적용 전에 저장된 대상 항목의 기존 점수도 지우고, 점수/점수 원문을 "안받음"으로 통일한다.
+function redactScoreNotCollectedData() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    SpreadsheetApp.getActiveSpreadsheet().toast("다른 작업(동기화 또는 제출 처리)이 실행 중입니다. 잠시 뒤 다시 실행하세요.");
+    return;
+  }
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var raw = spreadsheet.getSheetByName(RAW_SHEET);
+    if (!raw || raw.getLastRow() < 2) {
+      spreadsheet.toast("적용할 RAW 데이터가 없습니다.");
+      return;
+    }
+    var rowCount = raw.getLastRow() - 1;
+    var keys = raw.getRange(2, 7, rowCount, 3).getValues(); // 과, 메뉴/구분, 항목
+    var scores = raw.getRange(2, 12, rowCount, 2).getValues(); // 점수, 점수 원문
+    var changed = 0;
+    keys.forEach(function (key, index) {
+      if (shouldCollectScore_(key[0], key[1], key[2])) return;
+      if (scores[index][0] === "안받음" && scores[index][1] === "안받음") return;
+      scores[index] = ["안받음", "안받음"];
+      changed += 1;
+    });
+    if (changed > 0) raw.getRange(2, 12, rowCount, 2).setValues(scores);
+    spreadsheet.toast("기존 RAW " + changed + "개 항목의 점수를 삭제하고 '안받음'으로 표시했습니다. 이제 전체 동기화를 실행하세요.");
   } finally {
     lock.releaseLock();
   }

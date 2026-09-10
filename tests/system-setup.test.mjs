@@ -98,6 +98,7 @@ test("system setup exposes only the unified single-workbook workflow", () => {
     "refreshIntegratedData",
     "installDailyRefreshTrigger",
     "removeRefreshTriggers",
+    "redactScoreNotCollectedData",
     "sys_seedMeasurementSettings_",
     "dash_updateDashboard_",
     ".atHour(3).everyDays(1)",

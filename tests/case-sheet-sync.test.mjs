@@ -280,6 +280,34 @@ test("latest u-folio rows keep the pending count and per-student submission time
   assert.equal(submissions["2024-00001"].toISOString(), "2026-08-06T10:00:00.000Z");
 });
 
+test("comparison displays an intentionally uncollected score as 안받음", () => {
+  const sync = loadSync();
+  const target = "3학년 치의학 임상실습 2|치주과|증례별 임상참여|Flap Assist";
+  const row = {
+    attendanceNo: 1,
+    studentId: "2024-00001",
+    name: "학생일",
+    department: "치주과",
+    label: "Flap 완료",
+    measurement: "승인수",
+    sourceValue: 4,
+    sourceKey: "PERIO",
+    mappingKey: "PERIO_FLAP",
+    syncedAt: new Date("2026-08-06T03:00:00.000Z"),
+  };
+  const aggregated = sync.case_aggregateUfolio_({
+    ufolioTargets: target,
+    measurement: "승인수",
+    aggregation: "SUM",
+  }, {
+    [`2024-00001|${target}`]: { approvedCount: 4, patientCount: 2, score: "안받음", scoreRaw: "안받음", pendingCount: 1 },
+  }, "2024-00001");
+  const comparison = sync.case_comparisonRow_(row, aggregated, "일치", "");
+  assert.equal(comparison.approvedDisplay, 4);
+  assert.equal(comparison.patientDisplay, 2);
+  assert.equal(comparison.scoreDisplay, "안받음");
+});
+
 test("comparison sheet headers expose all u-folio metrics plus latest auth time", () => {
   const sync = loadSync();
   assert.deepEqual(Array.from(sync.CASE_COMPARISON_HEADERS), [

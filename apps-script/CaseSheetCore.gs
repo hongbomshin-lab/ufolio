@@ -150,11 +150,11 @@ function case_recordMetric_(record, measurement) {
   if (Array.isArray(record)) {
     if (normalized === "승인수") return record[9];
     if (normalized === "환자수") return record[10];
-    if (normalized === "점수") return record[11];
+    if (normalized === "점수") return String(record[12] || "").trim() === "안받음" ? "안받음" : record[11];
   } else if (record && typeof record === "object") {
     if (normalized === "승인수") return record.approvedCount;
     if (normalized === "환자수") return record.patientCount;
-    if (normalized === "점수") return record.score;
+    if (normalized === "점수") return String(record.scoreRaw || "").trim() === "안받음" ? "안받음" : record.score;
   }
   throw new Error("지원하지 않는 U-FOLIO 측정값입니다: " + measurement);
 }
@@ -183,6 +183,7 @@ function case_aggregateUfolio_(mapping, latestByKey, studentId) {
   if (targetLines.length === 0) return { found: false, targetFound: false, value: "", pending: "", metrics: emptyMetrics };
   var numbersByMetric = {};
   CASE_MEASUREMENT_CHOICES.forEach(function (metric) { numbersByMetric[metric] = []; });
+  var unavailableByMetric = {};
   var targetFound = false;
   var pendingSum = 0;
   var pendingSeen = false;
@@ -201,6 +202,10 @@ function case_aggregateUfolio_(mapping, latestByKey, studentId) {
     }
     CASE_MEASUREMENT_CHOICES.forEach(function (metric) {
       var value = case_recordMetric_(record, metric);
+      if (value === "안받음") {
+        unavailableByMetric[metric] = true;
+        return;
+      }
       if (!case_isBlank_(value)) numbersByMetric[metric].push(case_numericValue_(value));
     });
   });
@@ -213,9 +218,12 @@ function case_aggregateUfolio_(mapping, latestByKey, studentId) {
     return numbers[0]; // FIRST
   }
   var metrics = {};
-  CASE_MEASUREMENT_CHOICES.forEach(function (metric) { metrics[metric] = combine(numbersByMetric[metric]); });
+  CASE_MEASUREMENT_CHOICES.forEach(function (metric) {
+    metrics[metric] = unavailableByMetric[metric] ? "안받음" : combine(numbersByMetric[metric]);
+  });
   var chosen = metrics[measurement];
-  return { found: chosen !== "", targetFound: targetFound, value: chosen, pending: pending, metrics: metrics };
+  var unavailable = chosen === "안받음";
+  return { found: chosen !== "" && !unavailable, unavailable: unavailable, targetFound: targetFound, value: unavailable ? "" : chosen, pending: pending, metrics: metrics };
 }
 
 function case_itemKey_(practice, department, menu, item) {

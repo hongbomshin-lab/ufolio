@@ -68,6 +68,20 @@ test("dashboard matrix follows the measurement settings sheet over the fallback"
   assert.deepEqual(matrix.rows[0].values, [9]);
 });
 
+test("dashboard shows 안받음 when a protected item is viewed by score", () => {
+  const dash = loadDashboard();
+  const items = [item("치주과", "증례별 임상참여", "Flap Assist", "점수")];
+  const students = [{ attendanceNo: 1, studentId: "2024-00001", name: "학생일" }];
+  const key = `${PRACTICE}|치주과|증례별 임상참여|Flap Assist`;
+  const latestByKey = {
+    [`2024-00001|${key}`]: { approvedCount: 4, patientCount: 2, score: "안받음", scoreRaw: "안받음", pendingCount: 1 },
+  };
+  const matrix = dash.dash_buildMatrix_(items, students, latestByKey, {}, {});
+  assert.deepEqual(matrix.rows[0].values, ["안받음"]);
+  assert.equal(matrix.rows[0].average, "");
+  assert.equal(matrix.rows[0].submittedCount, 0);
+});
+
 test("dashboard hides unmapped OMS/prosthodontics items but keeps other departments whole", () => {
   const dash = loadDashboard();
   // 항목매핑 시트 행 형식: [매핑키, 활성, 검토상태, 소스키, 표시명, 완료식, 예정식, 인증대상식, U-FOLIO 대상, ...]
