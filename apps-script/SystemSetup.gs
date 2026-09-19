@@ -15,8 +15,8 @@ var SYS_COLORS = {
   ink: "#1F2937",
 };
 
-// 관리자가 평소에 보는 시트 4개만 보이고, 나머지는 전부 숨긴다. (숨긴 시트는 시트 목록 ☰ 에서 다시 열 수 있다)
-var SYS_VISIBLE_SHEETS = ["대시보드", "비교결과", "보철비교", "현황시트연결", "측정값설정"];
+// 관리자 화면은 보이고 시스템 시트는 숨긴다. (숨긴 시트는 시트 목록 ☰ 에서 다시 열 수 있다)
+var SYS_VISIBLE_SHEETS = ["대시보드", "비교결과", "지각자", "보철비교", "현황시트연결", "측정값설정"];
 var SYS_HIDDEN_SHEETS = [
   "항목매핑", "미매핑항목", "연결진단", "동기화로그", "현황최신", "유폴리오최신",
   "마스터항목", "학생명단", "RAW", "전송기록", "설정", "차트데이터", "사용안내",
@@ -31,6 +31,7 @@ function onOpen() {
     .createMenu("유폴리오 통합관리")
     .addItem("지금 전체 동기화", "refreshIntegratedData")
     .addItem("측정값 변경 적용", "applyMeasurementSettings")
+    .addItem("소아치과 총점 현황 적용", "applyPediatricScoreMappings")
     .addSeparator()
     .addItem("RAW 과거 제출 정리(최신만 남기기)", "compactRawSheet")
     .addItem("점수 안받음 정책 기존 RAW 적용", "redactScoreNotCollectedData")
@@ -56,8 +57,9 @@ function applyUnifiedWorkbookLayout() {
   sys_resetPresentationSheet_(guide);
   sys_writeGuide_(guide, "유폴리오 통합 시트", sys_adminGuideLines_());
   dash_updateDashboard_(spreadsheet);
+  case_updateLateSheet_(spreadsheet);
   sys_reorderAndHideSheets_(spreadsheet);
-  spreadsheet.toast("화면 구성을 적용했습니다. 평소에는 대시보드·비교결과·현황시트연결·측정값설정만 보입니다.");
+  spreadsheet.toast("화면 구성을 적용했습니다. 대시보드·비교결과·지각자·보철비교·현황시트연결·측정값설정이 표시됩니다.");
 }
 
 // 예전 ② 통합관리자 파일의 데이터(현황시트 URL, 매핑 검토상태, 이력)를 이 파일로 1회 이관한다.
@@ -97,6 +99,20 @@ function seedIntegrationDefaults() {
   sys_seedMeasurementSettings_(spreadsheet);
   sys_applyAdminFormats_(spreadsheet);
   SpreadsheetApp.getUi().alert("기존 입력값을 유지하면서 누락된 기본 연결·매핑·측정값 항목만 추가했습니다.");
+}
+
+// 기존 운영 파일에 새 총점 연결·매핑과 확정된 측정값만 적용한다.
+// 일반 화면 구성은 기존 측정값 선택을 보존하므로 별도 적용 메뉴를 제공한다.
+function applyPediatricScoreMappings() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var connections = case_defaultConnections_().filter(function (row) { return row[0] === "PED_SCORE"; });
+  var mappings = case_defaultMappings_().filter(function (row) { return row[3] === "PED_SCORE"; });
+  sys_ensureIntegrationSheets_(spreadsheet);
+  sys_seedRows_(spreadsheet.getSheetByName(CASE_CONNECTION_SHEET), CASE_CONNECTION_HEADERS, connections, 0, SYS_CONNECTION_PRESERVED_COLUMNS);
+  sys_seedRows_(spreadsheet.getSheetByName(CASE_MAPPING_SHEET), CASE_MAPPING_HEADERS, mappings, 0);
+  sys_seedMeasurementSettings_(spreadsheet, sys_measurementDefaults_(mappings));
+  sys_applyAdminFormats_(spreadsheet);
+  spreadsheet.toast("소아치과 총점 현황 8개 항목을 적용했습니다. 현황시트연결의 PED_SCORE 행에 원본 URL을 입력한 뒤 지금 전체 동기화를 실행하세요.");
 }
 
 function sys_ensureIntegrationSheets_(spreadsheet) {
@@ -145,7 +161,7 @@ function sys_measurementDefaults_(mappingRows) {
   return map;
 }
 
-function sys_seedMeasurementSettings_(spreadsheet) {
+function sys_seedMeasurementSettings_(spreadsheet, measurementOverrides) {
   var sheet = sys_getOrCreateSheet_(spreadsheet, CASE_MEASUREMENT_SHEET);
   var existing = {};
   if (sheet.getLastRow() > 1) {
@@ -163,7 +179,7 @@ function sys_seedMeasurementSettings_(spreadsheet) {
   var defaults = sys_measurementDefaults_(mappingRows);
   var rows = sys_readMaster_(spreadsheet).map(function (row) {
     var key = case_itemKey_(row[1], row[2], row[3], row[4]);
-    return [row[1], row[2], row[3], row[4], existing[key] || defaults[key] || row[6] || "승인수"];
+    return [row[1], row[2], row[3], row[4], (measurementOverrides && measurementOverrides[key]) || existing[key] || defaults[key] || row[6] || "승인수"];
   });
   sys_replaceData_(sheet, CASE_MEASUREMENT_HEADERS, rows);
   var bodyRows = Math.max(1, rows.length);
@@ -275,6 +291,7 @@ function sys_reorderAndHideSheets_(spreadsheet) {
     "대시보드": SYS_COLORS.navy,
     "비교결과": SYS_COLORS.blue,
     "보철비교": SYS_COLORS.blue,
+    "지각자": SYS_COLORS.orange,
     "현황시트연결": "#FFD966",
     "측정값설정": "#FFD966",
   };

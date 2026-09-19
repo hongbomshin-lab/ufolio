@@ -34,6 +34,7 @@ const palette = {
 const UNIFIED_SHEET_ORDER = [
   "대시보드",
   "비교결과",
+  "지각자",
   "보철비교",
   "현황시트연결",
   "측정값설정",
@@ -92,7 +93,7 @@ if (new Set(items.map((row) => [row.practice, row.department, row.menu, row.item
   throw new Error("마스터 항목 키가 중복되었습니다.");
 }
 if (new Set(roster.map((row) => row[1])).size !== roster.length) throw new Error("명단에 중복 학번이 있습니다.");
-if (defaults.connections.length !== 15) throw new Error("기본 현황시트 연결이 15개가 아닙니다.");
+if (defaults.connections.length !== 16) throw new Error("기본 현황시트 연결이 16개가 아닙니다.");
 
 function colLetter(index) {
   let value = index;
@@ -226,6 +227,22 @@ function buildUnifiedWorkbook() {
   // 행 색(미인증/불일치/일치)은 Apps Script 동기화가 칠하므로 조건부서식은 넣지 않는다.
   const comparison = addTableSheet(workbook, "비교결과", comparisonHeaders, [], [84, 120, 100, 120, 240, 82, 88, 74, 74, 74, 74, 74, 150]);
   comparison.freezePanes.freezeColumns(3);
+
+  // 지각자 목록은 동기화 시 학생별 최신 전송일로 생성한다.
+  const late = workbook.worksheets.add("지각자");
+  styleTitle(late, "지각자", "지금 전체 동기화를 실행하면 한국 시간 기준 최다 제출일과 다른 학생 및 미인증 학생이 표시됩니다.", "F");
+  late.getRange("A3:F3").merge();
+  late.getRange("A3").values = [["미인증 → 이전 날짜 인증 → 지각 순. 최다 제출일이 동률이면 최신 날짜를 기준으로 사용합니다."]];
+  late.getRange("A3:F3").format.wrapText = true;
+  late.getRange("A4:F4").values = [["출석번호", "학번", "이름", "구분", "마지막 전송 시각 (한국 시간)", "기준일 대비 일수"]];
+  styleHeader(late.getRange("A4:F4"));
+  [80, 120, 110, 145, 220, 135].forEach((width, index) => {
+    late.getRange(`${colLetter(index + 1)}:${colLetter(index + 1)}`).format.columnWidthPx = width;
+  });
+  late.getRange("E5:E1000").format.numberFormat = "yyyy-mm-dd hh:mm:ss";
+  late.freezePanes.freezeRows(4);
+  late.freezePanes.freezeColumns(3);
+  late.showGridLines = false;
 
   const prosCross = addTableSheet(workbook, "보철비교", prosCrossHeaders, [], [84, 120, 100, 130, 100, 120, 92, 82]);
   prosCross.freezePanes.freezeColumns(3);

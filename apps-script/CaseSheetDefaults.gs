@@ -43,6 +43,7 @@ function case_defaultConnections_() {
     ["CONS_SCORE", "Y", "보존과", "[보존] 유폴 인증 점수", "", "점수판", "A", "B", 3, "", 70, "CONFIG", "", "URL입력필요", ""],
     ["CONS_SURGERY", "N", "보존과", "[보존] 수술 현황", "", "점수표", "A", "B", 3, "", 70, "CONFIG", "", "보류", "수술 점수를 점수판 F열에서 받으므로 읽지 않는다"],
     ["PED_CHART", "Y", "소아치과", "[소치] 차팅 현황", "", "차팅 현황", "A", "B", 3, "", 80, "CONFIG", "", "URL입력필요", ""],
+    ["PED_SCORE", "Y", "소아치과", "[소치] 3-2학기 총점 현황", "", "시트1", "A", "B", 4, "", 90, "CONFIG", "", "URL입력필요", ""],
     ["PERIO", "Y", "치주과", "[치주] 원내생 현황", "", "현황", "A", "B", 4, "", 80, "CONFIG", "", "URL입력필요", ""],
     ["OM", "Y", "구강내과", "구강내과 케이스 현황", "", "원내생케이스", "A", "B", 5, "", 80, "CONFIG", "", "URL입력필요", ""],
     ["EXT", "Y", "구강악안면외과", "발치 프랙 현황", "", "발치 프랙 현황", "A", "B", 3, "", 100, "CONFIG", "", "URL입력필요", ""],
@@ -89,6 +90,17 @@ function case_defaultMappings_() {
     case_mapping_("CONS_ENDO_STAGE", "승인", "CONS_SCORE", "Endo 완료 점수", "VALUE(J)", "", "VALUE(J)", case_target_(cons, "증례별 임상참여", "Endodontic treatment(practice)"), "점수", "SUM", 50, "완료 점수 비교"),
 
     case_mapping_("PED_CHARTING", "승인", "PED_CHART", "소아 차팅 누적", "VALUE(D)", "", "VALUE(D)", case_target_(ped, "증례별 임상참여", "practice - Charting (교수님/전공의 진료 참여)"), "승인수", "SUM", 80, "비어 있지 않은 차팅 건수"),
+
+    // 총점 현황의 3행은 예시이므로 4행부터 읽는다. 차팅은 기존 PED_CHART보다 우선한다.
+    // 자율턴·예비승인·4-1/전체 차팅·비고·총점 열은 비교하지 않는다.
+    case_mapping_("PED_FACULTY_SCORE", "승인", "PED_SCORE", "교픽 점수", "VALUE(C)", "", "VALUE(C)", case_target_(ped, "나절별 임상참여", "assist & observation (교수님 진료 참여)"), "점수", "SUM", 90, "교픽 횟수(D)가 아닌 점수(C) 비교"),
+    case_mapping_("PED_ASSIST_SCORE", "승인", "PED_SCORE", "단타 점수", "VALUE(E)", "", "VALUE(E)", case_target_(ped, "증례별 임상참여", "assist/practice (교수님/전공의 진료 참여)"), "점수", "SUM", 90, "단타 예비승인(F) 제외"),
+    case_mapping_("PED_SCORE_CHARTING", "승인", "PED_SCORE", "차팅(3-2)", "VALUE(G)", "", "VALUE(G)", case_target_(ped, "증례별 임상참여", "practice - Charting (교수님/전공의 진료 참여)"), "승인수", "SUM", 90, "총점 현황 G열 우선; 제출 건수를 승인수와 비교하고 미승인은 별도 표시"),
+    case_mapping_("PED_QRAY", "승인", "PED_SCORE", "Q-ray 횟수", "VALUE(J)", "", "VALUE(J)", case_target_(ped, "증례별 임상참여", "practice - Q-ray (교수님/전공의 진료 참여)"), "승인수", "SUM", 90, "제출 건수를 승인수와 비교하고 미승인은 별도 표시"),
+    case_mapping_("PED_TOTAL", "승인", "PED_SCORE", "Total 완성 개수", "VALUE(K)", "", "VALUE(K)", [case_target_(ped, "Total Case", "Total case (교수님/전공의 진료 참여)"), case_target_(ped, "Total Case", "추가 Total case (교수님/전공의 진료 참여)")].join("\n"), "승인수", "SUM", 90, "Total case와 추가 Total case 승인수 합계"),
+    case_mapping_("PED_PORTFOLIO", "승인", "PED_SCORE", "Total Portfolio", "COUNT_STATUS(M:M,완료,차팅 미승인)", "", "COUNT_STATUS(M:M,완료,차팅 미승인)", case_target_(ped, "Total Case", "Total case - 포트폴리오 (교수님/전공의 진료 참여)"), "승인수", "SUM", 90, "완료·차팅 미승인은 1건, 미완료·공란은 0건"),
+    case_mapping_("PED_PRACTICE", "승인", "PED_SCORE", "프랙티스", "COUNT_STATUS(N:N,완료)", "", "COUNT_STATUS(N:N,완료)", case_target_(ped, "증례별 임상참여", "practice - Composite resin restoration (Cl. I) (원내생 환자 진료)"), "승인수", "SUM", 90, "완료만 1건; 어싸인 완료·X·미완료·공란은 0건"),
+    case_mapping_("PED_LAB_SCORE", "승인", "PED_SCORE", "기공 점수", "VALUE(O)", "", "VALUE(O)", [case_target_(ped, "기공", "기공 practice - L/A, NHA, B&L (전공의 진료 참여)"), case_target_(ped, "기공", "기공 practice - ROA (전공의 진료 참여)"), case_target_(ped, "기공", "기공 practice - RSM, FSM, RPE 등 (전공의 진료 참여)"), case_target_(ped, "기공", "기공 practice - Surgical splint (전공의 진료 참여)")].join("\n"), "점수", "SUM", 90, "기공 4개 항목의 점수 합계; 횟수 제외"),
 
     case_mapping_("PERIO_FLAP", "승인", "PERIO", "Flap 완료", "VALUE(C)", "VALUE(D)", "VALUE(C)", case_target_(perio, "증례별 임상참여", "Flap Assist"), "승인수", "SUM", 80, "예정(D) 제외한 3-2 완료(C)만 비교"),
     case_mapping_("PERIO_IMPLANT", "승인", "PERIO", "Implant 완료", "VALUE(F)", "VALUE(G)", "VALUE(F)", case_target_(perio, "증례별 임상참여", "Implant Assist"), "승인수", "SUM", 80, "예정(G) 제외한 3-2 완료(F)만 비교"),

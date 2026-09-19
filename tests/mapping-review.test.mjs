@@ -37,7 +37,7 @@ test("reviewed source row bounds exclude prosthodontic and OMS summary rows", ()
 test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   const mappings = mappingByKey();
 
-  assert.equal(Object.keys(mappings).length, 72);
+  assert.equal(Object.keys(mappings).length, 80);
 
   assert.equal(mappings.CONS_RESIN_STAGE[2], "승인");
   assert.equal(mappings.CONS_RESIN_STAGE[9], "점수");

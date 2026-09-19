@@ -110,10 +110,10 @@ function case_evaluateExpressionRaw_(expression, rowValues) {
     var separator = argumentText.indexOf(",");
     if (separator < 0) throw new Error("COUNT_STATUS에는 열 범위와 상태가 필요합니다.");
     var rangeReference = argumentText.slice(0, separator).trim();
-    var wanted = argumentText.slice(separator + 1).trim();
-    if (!wanted) throw new Error("COUNT_STATUS 상태가 비어 있습니다.");
+    var wanted = argumentText.slice(separator + 1).split(",").map(function (value) { return value.trim(); });
+    if (wanted.some(function (value) { return !value; })) throw new Error("COUNT_STATUS 상태가 비어 있습니다.");
     return case_valuesInRange_(values, rangeReference).filter(function (value) {
-      return String(value == null ? "" : value).trim() === wanted;
+      return wanted.indexOf(String(value == null ? "" : value).trim()) >= 0;
     }).length;
   }
   throw new Error("지원하지 않는 집계식입니다: " + text);

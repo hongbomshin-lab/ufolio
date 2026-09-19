@@ -5,6 +5,8 @@ var CASE_SNAPSHOT_SHEET = "현황최신";
 var CASE_UFOLIO_LATEST_SHEET = "유폴리오최신";
 var CASE_COMPARISON_SHEET = "비교결과";
 var CASE_PROS_CROSS_SHEET = "보철비교";
+var CASE_LATE_SHEET = "지각자";
+var CASE_LATE_HEADERS = ["출석번호", "학번", "이름", "구분", "마지막 전송 시각 (한국 시간)", "기준일 대비 일수"];
 var CASE_UNMAPPED_SHEET = "미매핑항목";
 var CASE_DIAGNOSTIC_SHEET = "연결진단";
 var CASE_SYNC_LOG_SHEET = "동기화로그";
@@ -408,13 +410,104 @@ function case_latestSubmissionFromRows_(rows) {
   var latest = {};
   rows.forEach(function (row) {
     var studentId = String(row[3] == null ? "" : row[3]).trim();
-    if (!studentId) return;
+    if (!studentId || row[0] == null || row[0] === "") return;
     var timestamp = new Date(row[0]).getTime();
     if (!isFinite(timestamp)) return;
     var previous = latest[studentId];
     if (!previous || timestamp > previous.getTime()) latest[studentId] = new Date(timestamp);
   });
   return latest;
+}
+
+// 한국 날짜 경계는 UTC 15:00(한국 00:00)이다. 서버/스크립트 시간대에 의존하지 않는다.
+function case_koreaDate_(date) {
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+// 학생별 마지막 전송일의 최빈값을 기준일로 삼는다. 동률이면 최신 날짜를 선택한다.
+// 이전 날짜는 조기 제출인지 지난 인증인지 단정하지 않고 별도 구분으로 표시한다.
+function case_buildLateReport_(roster, latestSubmissionAt) {
+  var counts = {};
+  var students = roster.map(function (student) {
+    var id = String(student.studentId == null ? "" : student.studentId).trim();
+    var value = latestSubmissionAt[id];
+    var at = value == null || value === "" ? null : new Date(value);
+    if (at && !isFinite(at.getTime())) at = null;
+    var day = at ? case_koreaDate_(at) : "";
+    if (day) counts[day] = (counts[day] || 0) + 1;
+    return { attendanceNo: student.attendanceNo, studentId: id, name: student.name, latestAt: at, day: day };
+  });
+  var days = Object.keys(counts).sort(function (left, right) {
+    return counts[right] - counts[left] || right.localeCompare(left);
+  });
+  var referenceDate = days[0] || "";
+  var rows = students.filter(function (student) { return !student.day || student.day !== referenceDate; }).map(function (student) {
+    student.status = !student.day ? "미인증" : student.day < referenceDate ? "이전 날짜 인증" : "지각";
+    student.daysFromReference = student.day && referenceDate
+      ? Math.round((Date.parse(student.day + "T00:00:00Z") - Date.parse(referenceDate + "T00:00:00Z")) / 86400000)
+      : "";
+    return student;
+  });
+  var rank = { "미인증": 0, "이전 날짜 인증": 1, "지각": 2 };
+  rows.sort(function (left, right) {
+    var byStatus = rank[left.status] - rank[right.status];
+    if (byStatus) return byStatus;
+    if (left.latestAt && right.latestAt) {
+      var byTime = left.latestAt.getTime() - right.latestAt.getTime();
+      if (byTime) return left.status === "지각" ? -byTime : byTime;
+    }
+    return String(left.attendanceNo).localeCompare(String(right.attendanceNo), "ko", { numeric: true })
+      || left.studentId.localeCompare(right.studentId);
+  });
+  return { referenceDate: referenceDate, referenceCount: counts[referenceDate] || 0, totalCount: students.length, rows: rows };
+}
+
+function case_updateLateSheet_(spreadsheet) {
+  // 외부 현황 읽기 중 들어온 학생 제출도 포함하도록 쓰기 잠금 안에서 RAW를 다시 읽는다.
+  var roster = case_sheetRows_(spreadsheet.getSheetByName("학생명단"), 3)
+    .filter(function (row) { return row[0] !== "" && row[1] !== ""; })
+    .map(function (row) { return { attendanceNo: row[0], studentId: row[1], name: row[2] }; });
+  var latest = case_latestSubmissionFromRows_(case_sheetRows_(spreadsheet.getSheetByName("RAW"), 14));
+  var report = case_buildLateReport_(roster, latest);
+  var sheet = spreadsheet.getSheetByName(CASE_LATE_SHEET) || spreadsheet.insertSheet(CASE_LATE_SHEET);
+  spreadsheet.setSpreadsheetTimeZone("Asia/Seoul");
+  var width = CASE_LATE_HEADERS.length;
+  var rowCount = Math.max(5, sheet.getLastRow(), report.rows.length + 4);
+  if (sheet.getMaxRows() < rowCount) sheet.insertRowsAfter(sheet.getMaxRows(), rowCount - sheet.getMaxRows());
+  if (sheet.getFilter()) sheet.getFilter().remove();
+  sheet.getRange(1, 1, rowCount, width).breakApart().clearContent().setBackground("#FFFFFF");
+  sheet.getRange(1, 1, 1, width).merge().setValue("지각자").setBackground("#17365D").setFontColor("#FFFFFF").setFontSize(16).setFontWeight("bold");
+  var summary = report.referenceDate
+    ? "기준일: " + report.referenceDate + " (최다 제출일, " + report.referenceCount + "/" + report.totalCount + "명)"
+    : "기준일 없음: 아직 인증 전송 기록이 없습니다.";
+  sheet.getRange(2, 1, 1, width).merge().setValue(summary).setBackground("#D9EAF7").setWrap(true);
+  sheet.getRange(3, 1, 1, width).merge().setValue("한국 시간 자정 기준 · 동률이면 최신 날짜 · 미인증 → 이전 날짜 인증 → 지각 순. 마지막 전송 기준으로 매 동기화 시 다시 판단합니다.").setWrap(true);
+  sheet.getRange(4, 1, 1, width).setValues([CASE_LATE_HEADERS]).setBackground("#2F75B5").setFontColor("#FFFFFF").setFontWeight("bold").setWrap(true);
+  var body = sheet.getRange(5, 1, rowCount - 4, width);
+  body.setFontColor("#1F2937").setFontSize(10).setFontWeight("normal").setNumberFormat("General");
+  sheet.getRange(5, 2, rowCount - 4, 1).setNumberFormat("@");
+  sheet.getRange(5, 5, rowCount - 4, 1).setNumberFormat("yyyy-mm-dd hh:mm:ss");
+  if (report.rows.length) {
+    sheet.getRange(5, 1, report.rows.length, width).setValues(report.rows.map(function (row) {
+      return [row.attendanceNo, row.studentId, row.name, row.status, row.latestAt || "미인증", row.daysFromReference];
+    })).setBackgrounds(report.rows.map(function (row) {
+      return Array(width).fill(row.status === "미인증" ? "#FCE4D6" : "#FFF2CC");
+    }));
+  } else {
+    sheet.getRange(5, 1).setValue(report.totalCount ? "해당 학생 없음" : "학생명단이 비어 있습니다.");
+  }
+  [80, 120, 110, 145, 220, 135].forEach(function (pixels, index) { sheet.setColumnWidth(index + 1, pixels); });
+  sheet.setRowHeight(1, 34);
+  sheet.setRowHeight(2, 30);
+  sheet.setRowHeight(3, 42);
+  sheet.setRowHeight(4, 36);
+  sheet.getRange(4, 1, Math.max(2, report.rows.length + 1), width).createFilter();
+  sheet.setFrozenRows(4);
+  sheet.setFrozenColumns(3);
+  sheet.setHiddenGridlines(true);
+  sheet.setTabColor("#F4B183");
+  if (sheet.isSheetHidden()) sheet.showSheet();
+  return report;
 }
 
 function case_connectionObject_(row) {
@@ -534,6 +627,7 @@ function refreshIntegratedData() {
     log.getRange(log.getLastRow() + 1, 1, 1, CASE_SYNC_LOG_HEADERS.length).setValues([[
       new Date(), normalCount, failedCount, result.snapshotRows.length, result.comparisonRows.length, failedCount ? "일부실패" : "성공",
     ]]);
+    case_updateLateSheet_(spreadsheet);
     dash_updateDashboard_(spreadsheet);
     return result;
   } finally {
