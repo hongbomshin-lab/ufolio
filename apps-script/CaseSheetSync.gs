@@ -470,6 +470,8 @@ function case_updateLateSheet_(spreadsheet) {
   var latest = case_latestSubmissionFromRows_(case_sheetRows_(spreadsheet.getSheetByName("RAW"), 14));
   var report = case_buildLateReport_(roster, latest);
   var sheet = spreadsheet.getSheetByName(CASE_LATE_SHEET) || spreadsheet.insertSheet(CASE_LATE_SHEET);
+  // 제목·설명 행을 A:F로 병합하므로 기존 열 고정을 먼저 해제한다.
+  sheet.setFrozenColumns(0);
   spreadsheet.setSpreadsheetTimeZone("Asia/Seoul");
   var width = CASE_LATE_HEADERS.length;
   var rowCount = Math.max(5, sheet.getLastRow(), report.rows.length + 4);
@@ -503,7 +505,6 @@ function case_updateLateSheet_(spreadsheet) {
   sheet.setRowHeight(4, 36);
   sheet.getRange(4, 1, Math.max(2, report.rows.length + 1), width).createFilter();
   sheet.setFrozenRows(4);
-  sheet.setFrozenColumns(3);
   sheet.setHiddenGridlines(true);
   sheet.setTabColor("#F4B183");
   if (sheet.isSheetHidden()) sheet.showSheet();

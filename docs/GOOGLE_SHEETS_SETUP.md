@@ -63,7 +63,7 @@ URL이 필요 없는 소스키: `IMPLANT`, `CONS_SURGERY`, `PROS_CHART` (셋 다
 | E | 단타 점수 | 증례별 임상참여 → assist/practice | 점수 |
 | G | 차팅(3-2) | 증례별 임상참여 → practice - Charting | 승인수 |
 | J | Q-ray 횟수 | 증례별 임상참여 → practice - Q-ray | 승인수 |
-| K | Total 완성 개수 | Total Case → Total case + 추가 Total case | 승인수 합계 |
+| K | Total 완성 개수 | 증례별 임상참여 → Total case 3rd visit | 승인수 |
 | M | Total Portfolio | Total Case → Total case - 포트폴리오 | 완료·차팅 미승인 = 1, 미완료·공란 = 0 ↔ 승인수 |
 | N | 프랙티스 | 증례별 임상참여 → practice - Composite resin restoration (Cl. I) | 완료만 1, 어싸인 완료·X·미완료·공란 = 0 ↔ 승인수 |
 | O | 기공 | 기공 → L/A·NHA·B&L, ROA, RSM·FSM·RPE 등, Surgical splint | 4개 항목 점수 합계 |

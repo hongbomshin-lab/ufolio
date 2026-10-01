@@ -51,7 +51,7 @@ test("portfolio includes charting pending but not incomplete or blank statuses",
   assert.throws(() => context.case_evaluateExpression_(portfolio.certificationExpression, [...Array(12).fill(""), "#REF!"]), /원본 수식 오류/);
 });
 
-test("pediatric sync prioritizes new charting, sums Total and lab, and keeps pending separate", () => {
+test("pediatric sync prioritizes new charting, compares third-visit Total, sums lab, and keeps pending separate", () => {
   const context = load();
   const mappings = context.case_defaultMappings_().filter((row) => ["PED_SCORE", "PED_CHART"].includes(row[3])).map(context.case_mappingObject_);
   const records = {};
@@ -60,7 +60,7 @@ test("pediatric sync prioritizes new charting, sums Total and lab, and keeps pen
     PED_ASSIST_SCORE: [[3, 25, 0]],
     PED_SCORE_CHARTING: [[4, 40, 1]],
     PED_QRAY: [[2, 20, 1]],
-    PED_TOTAL: [[2, 20, 0], [1, 10, 0]],
+    PED_TOTAL: [[3, 30, 0]],
     PED_PORTFOLIO: [[0, 0, 1]],
     PED_PRACTICE: [[0, 0, 0]],
     PED_LAB_SCORE: [[1, 2, 0], [1, 3, 0], [1, 4, 0], [1, 5, 0]],

@@ -86,13 +86,18 @@ test("missing and invalid timestamps never become a 1970 authentication", () => 
 
 function memorySheet(initial = [], maxRows = 1000) {
   const sheet = {
-    rows: initial.map((row) => [...row]), maxRows, hidden: true, filter: null, formats: [],
+    rows: initial.map((row) => [...row]), maxRows, hidden: true, filter: null, formats: [], mergedRanges: [],
     getLastRow() { let length = this.rows.length; while (length && !(this.rows[length - 1] || []).some((value) => value != null && value !== "")) length--; return length; },
     getMaxRows() { return this.maxRows; },
     insertRowsAfter(after, count) { assert.equal(after, this.maxRows); this.maxRows += count; },
     getFilter() { return this.filter; },
     setFrozenRows(value) { this.frozenRows = value; },
-    setFrozenColumns(value) { this.frozenColumns = value; },
+    setFrozenColumns(value) {
+      if (this.mergedRanges.some((merged) => merged.column <= value && merged.column + merged.width - 1 > value)) {
+        throw new Error("Cannot freeze part of a merged cell");
+      }
+      this.frozenColumns = value;
+    },
     setColumnWidth() {}, setRowHeight() {}, setHiddenGridlines() {}, setTabColor() {},
     isSheetHidden() { return this.hidden; }, showSheet() { this.hidden = false; },
   };
@@ -107,6 +112,20 @@ function memorySheet(initial = [], maxRows = 1000) {
       },
       setValue(value) { (sheet.rows[row - 1] ??= [])[column - 1] = value; return range; },
       clearContent() { for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) (sheet.rows[row - 1 + r] ??= [])[column - 1 + c] = ""; return range; },
+      breakApart() {
+        sheet.mergedRanges = sheet.mergedRanges.filter((merged) =>
+          merged.row + merged.height - 1 < row || row + height - 1 < merged.row ||
+          merged.column + merged.width - 1 < column || column + width - 1 < merged.column,
+        );
+        return range;
+      },
+      merge() {
+        if (column <= sheet.frozenColumns && column + width - 1 > sheet.frozenColumns) {
+          throw new Error("Cannot merge across frozen and unfrozen columns");
+        }
+        sheet.mergedRanges.push({ row, column, height, width });
+        return range;
+      },
       setNumberFormat(value) { sheet.formats.push({ row, column, height, width, value }); return range; },
       createFilter() { sheet.filter = { row, height, remove() { sheet.filter = null; } }; return range; },
     }, { get: (target, key) => target[key] || (() => range) });
@@ -131,6 +150,7 @@ test("late sheet stores real timestamps, labels missing students and clears prev
   assert.equal(sheet.getLastRow(), 11);
   assert.equal(sheet.hidden, false);
   assert.equal(sheet.frozenRows, 4);
+  assert.equal(sheet.frozenColumns, 0);
   assert.equal(spreadsheet.timeZone, "Asia/Seoul");
   spreadsheet.sheets.RAW.rows = [Array(14).fill("header"), raw("test-1", "2026-09-16T14:59:59Z"), raw("test-2", "2026-09-16T10:00:00Z"), raw("test-3", "2026-09-16T15:00:00Z"), ...roster(8).slice(3).map((student) => raw(student.studentId, "2026-09-16T10:00:00Z"))];
   context.case_updateLateSheet_(spreadsheet);
@@ -144,6 +164,19 @@ test("late sheet stores real timestamps, labels missing students and clears prev
   assert.equal(sheet.rows[4][0], "해당 학생 없음");
   assert.equal(sheet.rows[4][4], "");
   assert.equal(Object.keys(spreadsheet.sheets).filter((name) => name === "지각자").length, 1);
+});
+
+test("late sheet clears an existing three-column freeze before rebuilding merged headings", () => {
+  const context = load();
+  const spreadsheet = workbook(roster(1), [raw("test-1", "2026-09-16T10:00:00Z")]);
+  const sheet = memorySheet([["old heading"]], 5);
+  sheet.frozenColumns = 3;
+  spreadsheet.sheets.지각자 = sheet;
+
+  context.case_updateLateSheet_(spreadsheet);
+
+  assert.equal(sheet.frozenColumns, 0);
+  assert.equal(sheet.mergedRanges.filter((merged) => merged.width === 6).length, 3);
 });
 
 test("sync reads submissions arriving during source reads under the write lock, even if a source failed", () => {

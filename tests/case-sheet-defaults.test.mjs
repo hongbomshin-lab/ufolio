@@ -116,6 +116,31 @@ test("approved mappings use the restricted DSL and valid master targets", () => 
   assert.ok(extraction["우선순위"] > duplicateOms["우선순위"]);
 });
 
+test("pediatric Total completion compares only the third-visit approval count", () => {
+  const defaults = loadDefaults();
+  vm.runInContext(readFileSync("apps-script/CaseSheetCore.gs", "utf8"), defaults, { filename: "apps-script/CaseSheetCore.gs" });
+  const row = defaults.case_defaultMappings_().find((candidate) => candidate[0] === "PED_TOTAL");
+  const mapping = Object.fromEntries(defaults.CASE_MAPPING_HEADERS.map((header, index) => [header, row[index]]));
+  const thirdVisit = loadMasterItems().find((item) => item.department === "소아치과" && item.item === "Total case 3rd visit (교수님/전공의 진료 참여)");
+  const target = [thirdVisit.practice, thirdVisit.department, thirdVisit.menu, thirdVisit.item].join("|");
+  assert.equal(mapping["인증대상식"], "VALUE(K)");
+  assert.equal(mapping["U-FOLIO 대상"], target);
+  assert.equal(mapping["측정값"], "승인수");
+
+  const studentId = "test-student";
+  const latest = {
+    [`${studentId}|${target}`]: { approvedCount: 2 },
+    [`${studentId}|${thirdVisit.practice}|소아치과|Total Case|Total case (교수님/전공의 진료 참여)`]: { approvedCount: 4 },
+    [`${studentId}|${thirdVisit.practice}|소아치과|Total Case|추가 Total case (교수님/전공의 진료 참여)`]: { approvedCount: 3 },
+  };
+  const actual = defaults.case_aggregateUfolio_({
+    ufolioTargets: mapping["U-FOLIO 대상"],
+    measurement: mapping["측정값"],
+    aggregation: mapping["집계방식"],
+  }, latest, studentId);
+  assert.equal(actual.value, 2);
+});
+
 test("default settings contain no live URLs or row-level case identifiers", () => {
   const defaultsSource = readFileSync("apps-script/CaseSheetDefaults.gs", "utf8");
   assert.equal(/https?:\/\//.test(defaultsSource), false);
