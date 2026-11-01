@@ -515,6 +515,8 @@ function sys_resetSheet_(sheet) {
   sheet.getCharts().forEach(function (chart) { sheet.removeChart(chart); });
   if (sheet.getFilter()) sheet.getFilter().remove();
   sheet.clear();
+  // clear()는 데이터 확인 규칙을 남긴다. 옛 드롭다운이 새 값을 거부하지 않도록 함께 지운다. 규칙은 호출부가 다시 건다.
+  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).clearDataValidations();
   sheet.clearConditionalFormatRules();
 }
 
