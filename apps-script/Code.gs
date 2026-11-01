@@ -438,6 +438,43 @@ function compactRawSheet() {
   }
 }
 
+function keepRosterRawRows_(rawRows, rosterRows) {
+  var rosterIds = {};
+  rosterRows.forEach(function (row) { rosterIds[rawKeyText_(row[1])] = true; });
+  return rawRows.filter(function (row) { return rosterIds[rawKeyText_(row[3])]; });
+}
+
+// 학생명단에서 행을 지운 학생의 RAW를 삭제한다. 전송기록(감사 로그)은 남긴다.
+function removeNonRosterRawRows() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    SpreadsheetApp.getActiveSpreadsheet().toast("다른 작업(동기화 또는 제출 처리)이 실행 중입니다. 잠시 뒤 다시 실행하세요.");
+    return;
+  }
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var roster = spreadsheet.getSheetByName(ROSTER_SHEET);
+    var raw = spreadsheet.getSheetByName(RAW_SHEET);
+    // 명단이 비어 있으면 RAW 전체가 지워지므로 실행하지 않는다.
+    if (!roster || roster.getLastRow() < 2) {
+      spreadsheet.toast("학생명단이 비어 있어 실행하지 않았습니다.");
+      return;
+    }
+    if (!raw || raw.getLastRow() < 2) return;
+    var values = raw.getRange(2, 1, raw.getLastRow() - 1, RAW_HEADERS.length).getValues();
+    var kept = keepRosterRawRows_(values, roster.getRange(2, 1, roster.getLastRow() - 1, 3).getValues());
+    if (kept.length === values.length) {
+      spreadsheet.toast("삭제할 RAW가 없습니다.");
+      return;
+    }
+    raw.getRange(2, 1, values.length, RAW_HEADERS.length).clearContent();
+    if (kept.length > 0) raw.getRange(2, 1, kept.length, RAW_HEADERS.length).setValues(kept);
+    spreadsheet.toast("명단에 없는 학생의 RAW " + (values.length - kept.length) + "행을 삭제했습니다. 이제 전체 동기화를 실행하세요.");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // 정책 적용 전에 저장된 대상 항목의 기존 점수도 지우고, 점수/점수 원문을 "안받음"으로 통일한다.
 function redactScoreNotCollectedData() {
   var lock = LockService.getScriptLock();

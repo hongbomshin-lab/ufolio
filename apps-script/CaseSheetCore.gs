@@ -145,14 +145,22 @@ function case_ufolioKey_(studentId, target) {
   return [studentId].concat(target).map(case_normalizeKeyPart_).join("|");
 }
 
+// 유폴리오 화면의 "제출 건수" = 승인 + 승인대기. RAW에는 승인대기만 있으므로 합산한다.
+function case_submittedCount_(approved, pending) {
+  if (case_isBlank_(approved) && case_isBlank_(pending)) return "";
+  return Number(approved || 0) + Number(pending || 0);
+}
+
 function case_recordMetric_(record, measurement) {
   var normalized = String(measurement == null ? "" : measurement).replace(/\s+/g, "");
   if (Array.isArray(record)) {
     if (normalized === "승인수") return record[9];
+    if (normalized === "제출건수") return case_submittedCount_(record[9], record[13]);
     if (normalized === "환자수") return record[10];
     if (normalized === "점수") return String(record[12] || "").trim() === "안받음" ? "안받음" : record[11];
   } else if (record && typeof record === "object") {
     if (normalized === "승인수") return record.approvedCount;
+    if (normalized === "제출건수") return case_submittedCount_(record.approvedCount, record.pendingCount);
     if (normalized === "환자수") return record.patientCount;
     if (normalized === "점수") return String(record.scoreRaw || "").trim() === "안받음" ? "안받음" : record.score;
   }
@@ -165,7 +173,7 @@ function case_recordPending_(record) {
   return "";
 }
 
-// 승인수·환자수·점수 세 측정값을 전부 집계해 metrics 로 돌려준다.
+// 승인수·제출건수·환자수·점수 측정값을 전부 집계해 metrics 로 돌려준다.
 // value/found 는 mapping.measurement 로 고른 측정값 기준(비교 로직이 쓰는 값)이다.
 function case_aggregateUfolio_(mapping, latestByKey, studentId) {
   var measurement = String(mapping && mapping.measurement || "").replace(/\s+/g, "");
@@ -236,7 +244,7 @@ function case_firstTargetKey_(ufolioTargets) {
   return line.split("|").map(case_normalizeKeyPart_).join("|");
 }
 
-var CASE_MEASUREMENT_CHOICES = ["승인수", "환자수", "점수"];
+var CASE_MEASUREMENT_CHOICES = ["승인수", "제출건수", "환자수", "점수"];
 
 // 측정값설정 시트가 매핑의 측정값보다 우선한다. 대상이 여러 항목인 매핑은 첫 항목의 설정을 따른다.
 function case_effectiveMeasurement_(mapping, settings) {

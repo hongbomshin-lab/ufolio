@@ -194,7 +194,7 @@ test("sync reads submissions arriving during source reads under the write lock, 
     spreadsheet.sheets.RAW.rows.push(raw("test-3", "2026-09-16T15:00:00Z"));
     return { snapshotRows: [], comparisonRows: [], prosCrossRows: [], unmappedRows: [], diagnostics: [], connectionResults: [{ status: "원본오류" }] };
   };
-  for (const name of ["case_replaceOutput_", "case_paintComparison_", "case_updateConnectionStatuses_"]) context[name] = () => {};
+  for (const name of ["case_replaceOutput_", "case_paintComparison_", "case_updateConnectionStatuses_", "case_updateOrthoLabSheet_", "case_updateSubmissionCheckSheet_"]) context[name] = () => {};
   const realUpdate = context.case_updateLateSheet_;
   context.case_updateLateSheet_ = (book) => { assert.equal(locked, true); return realUpdate(book); };
   context.dash_updateDashboard_ = () => { dashboardUpdated = true; };

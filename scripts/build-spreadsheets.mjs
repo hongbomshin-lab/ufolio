@@ -30,12 +30,14 @@ const palette = {
   white: "#FFFFFF",
 };
 
-// 보이는 시트 4개가 앞, 시스템 시트는 뒤. Google Sheets에서는 Apps Script 화면 구성 적용이 뒤쪽을 숨긴다.
+// 보이는 시트가 앞, 시스템 시트는 뒤. Google Sheets에서는 Apps Script 화면 구성 적용이 뒤쪽을 숨긴다.
 const UNIFIED_SHEET_ORDER = [
   "대시보드",
   "비교결과",
   "지각자",
   "보철비교",
+  "교정기공",
+  "전송확인",
   "현황시트연결",
   "측정값설정",
   "항목매핑",
@@ -247,6 +249,10 @@ function buildUnifiedWorkbook() {
   const prosCross = addTableSheet(workbook, "보철비교", prosCrossHeaders, [], [84, 120, 100, 130, 100, 120, 92, 82]);
   prosCross.freezePanes.freezeColumns(3);
 
+  // 교정기공·전송확인은 동기화 때 Apps Script가 내용을 채운다.
+  addTableSheet(workbook, "교정기공", ["출석번호", "이름", "교정 기공 승인수 누적"], [], [90, 110, 250]);
+  addTableSheet(workbook, "전송확인", ["번호", "이름", "최신 유폴 인증 전송일시", "학번"], [], [70, 110, 210, 120]);
+
   const connectionSheet = addTableSheet(workbook, "현황시트연결", defaults.connectionHeaders, defaults.connections, [110, 58, 125, 220, 390, 160, 92, 82, 92, 92, 82, 130, 160, 110, 420]);
   connectionSheet.getRange(`A2:L${defaults.connections.length + 1}`).format.fill = palette.paleYellow;
   connectionSheet.getRange(`M2:O${defaults.connections.length + 1}`).format.fill = palette.paleBlue;
@@ -255,7 +261,7 @@ function buildUnifiedWorkbook() {
   connectionSheet.freezePanes.freezeColumns(4);
 
   const measurement = addTableSheet(workbook, "측정값설정", measurementHeaders, measurementRows(), [190, 125, 155, 330, 92]);
-  measurement.getRange("E2:E207").dataValidation = { rule: { type: "list", values: ["승인수", "환자수", "점수"] } };
+  measurement.getRange("E2:E207").dataValidation = { rule: { type: "list", values: ["승인수", "제출건수", "환자수", "점수"] } };
   measurement.getRange("E2:E207").format.fill = palette.paleYellow;
   measurement.freezePanes.freezeColumns(4);
 
@@ -263,7 +269,7 @@ function buildUnifiedWorkbook() {
   mappingSheet.getRange(`A2:M${defaults.mappings.length + 1}`).format.fill = palette.paleYellow;
   mappingSheet.getRange(`B2:B${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
   mappingSheet.getRange(`C2:C${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["승인", "검토필요", "보류"] } };
-  mappingSheet.getRange(`J2:J${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["승인수", "환자수", "점수"] } };
+  mappingSheet.getRange(`J2:J${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["승인수", "제출건수", "환자수", "점수"] } };
   mappingSheet.getRange(`K2:K${defaults.mappings.length + 1}`).dataValidation = { rule: { type: "list", values: ["SUM", "MAX", "FIRST"] } };
   mappingSheet.getRange(`E2:I${defaults.mappings.length + 1}`).format.wrapText = true;
   mappingSheet.getRange(`M2:M${defaults.mappings.length + 1}`).format.wrapText = true;
@@ -279,7 +285,7 @@ function buildUnifiedWorkbook() {
   const masterSheet = addTableSheet(workbook, "마스터항목", masterHeaders, masterRows(), [58, 190, 125, 155, 330, 82, 88, 340]);
   masterSheet.getRange("A2:A207").dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
   masterSheet.getRange("F2:F207").dataValidation = { rule: { type: "list", values: ["Y", "N"] } };
-  masterSheet.getRange("G2:G207").dataValidation = { rule: { type: "list", values: ["승인수", "환자수", "점수"] } };
+  masterSheet.getRange("G2:G207").dataValidation = { rule: { type: "list", values: ["승인수", "제출건수", "환자수", "점수"] } };
   masterSheet.getRange("F2:H207").format.fill = palette.paleYellow;
   masterSheet.freezePanes.freezeColumns(1);
 

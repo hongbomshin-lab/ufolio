@@ -349,10 +349,11 @@ test("prosthodontic cross rows pair the status sheets and attach the u-folio val
   const removableTarget = "3학년 치의학 임상실습 2|보철과|Total Case|Total case evaluation (가철성)";
   const chartingTarget = "3학년 치의학 임상실습 2|보철과|증례별 임상참여|22. Charting";
   const rows = [
-    snapshot({ mappingKey: "PROS_REMOVABLE", sourceValue: 2, ufolioTargets: removableTarget }),
+    snapshot({ mappingKey: "PROS_REMOVABLE", sourceValue: 1, ufolioTargets: removableTarget }), // 완료값은 보철비교에 쓰지 않는다
+    snapshot({ mappingKey: "PROS_CUM_REMOVABLE", sourceValue: 2, ufolioTargets: removableTarget, priority: 50 }),
     snapshot({ mappingKey: "PROS_TOTAL_REMOVABLE", sourceKey: "PROS_TOTAL", sourceValue: 2, ufolioTargets: removableTarget, priority: 50 }),
     snapshot({ mappingKey: "PROS_CHARTING", sourceValue: 4, ufolioTargets: chartingTarget }),
-    snapshot({ mappingKey: "PROS_FIXED", sourceValue: 1, ufolioTargets: "3학년 치의학 임상실습 2|보철과|Total Case|Total case evaluation (고정성)" }),
+    snapshot({ mappingKey: "PROS_CUM_FIXED", sourceValue: 1, ufolioTargets: "3학년 치의학 임상실습 2|보철과|Total Case|Total case evaluation (고정성)" }),
     snapshot({ mappingKey: "PROS_STUDENT_EVAL", sourceValue: 10, ufolioTargets: "3학년 치의학 임상실습 2|보철과|증례별 임상참여|01. Student evaluation" }),
   ];
   const latest = {
