@@ -196,6 +196,29 @@ test("student file imports only A:C once and later runs reuse the saved link", (
   assert.match(alert, /이미 있습니다[\s\S]*https:\/\/sheet\/new/);
 });
 
+test("reseeding replaces an old dropdown rule instead of failing on a newly allowed value", () => {
+  const context = loadSetup();
+  let oldRule = true;
+  const written = [];
+  const sheet = {
+    getLastRow: () => 2, getMaxRows: () => 100, getMaxColumns: () => 13,
+    getCharts: () => [], getFilter: () => null, clear() {}, clearConditionalFormatRules() {},
+    setFrozenRows() {}, setHiddenGridlines() {},
+    getRange: () => new Proxy({
+      getValues: () => [["PROS_CHARTING", "승인수"]],
+      clearDataValidations() { oldRule = false; },
+      setValues(rows) {
+        // 실제 Sheets처럼 sheet.clear() 뒤에도 남은 규칙이 새 값을 거부한다.
+        if (oldRule && rows.flat().includes("제출건수")) throw new Error("데이터 확인 규칙 위반");
+        written.push(...rows);
+      },
+    }, { get: (target, key) => target[key] || (() => undefined) }),
+  };
+  context.sys_styleHeader_ = () => {};
+  context.sys_seedRows_(sheet, ["매핑키", "측정값"], [["PROS_CHARTING", "제출건수"]], 0);
+  assert.deepEqual(Array.from(written.at(-1)), ["PROS_CHARTING", "제출건수"]);
+});
+
 test("removing students from the roster keeps only roster rows in RAW", () => {
   const context = load();
   const kept = context.keepRosterRawRows_(
