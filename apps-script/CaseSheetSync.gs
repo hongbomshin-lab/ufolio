@@ -7,6 +7,11 @@ var CASE_COMPARISON_SHEET = "비교결과";
 var CASE_PROS_CROSS_SHEET = "보철비교";
 var CASE_LATE_SHEET = "지각자";
 var CASE_LATE_HEADERS = ["출석번호", "학번", "이름", "구분", "마지막 전송 시각 (한국 시간)", "기준일 대비 일수"];
+var CASE_ORTHO_LAB_SHEET = "교정기공";
+var CASE_ORTHO_LAB_HEADERS = ["출석번호", "이름", "교정 기공 승인수 누적"];
+var CASE_SUBMISSION_CHECK_SHEET = "전송확인";
+// 학생용 파일은 앞의 3열만 가져간다. 학번(D)은 수식 조회용이라 내보내지 않는다.
+var CASE_SUBMISSION_CHECK_HEADERS = ["번호", "이름", "최신 유폴 인증 전송일시", "학번"];
 var CASE_UNMAPPED_SHEET = "미매핑항목";
 var CASE_DIAGNOSTIC_SHEET = "연결진단";
 var CASE_SYNC_LOG_SHEET = "동기화로그";
@@ -23,12 +28,18 @@ var CASE_COMPARISON_HEADERS = [
 var CASE_MEASUREMENT_HEADERS = ["실습차수", "과", "메뉴/구분", "항목", "측정값"];
 var CASE_PROS_CROSS_HEADERS = ["출석번호", "학번", "이름", "항목", "현황조사값", "개인별토탈값", "유폴리오값", "상태"];
 // 보철비교: 왼쪽=기존 현황조사(PROS), 오른쪽=개인별토탈(PROS_TOTAL) 시트. 두 값 모두 예정 포함 누적이다.
+// 비교결과의 가철·고정·임플은 완료값을 쓰므로 왼쪽은 누적 전용 매핑(PROS_CUM_*)을 읽는다.
 // 차팅 케이스 현황(PROS_CHART) 시트는 실시간 현황조사용이라 비교하지 않는다.
 var CASE_PROS_CROSS_PAIRS = [
-  { label: "가철 누적", left: "PROS_REMOVABLE", right: "PROS_TOTAL_REMOVABLE" },
-  { label: "고정 누적", left: "PROS_FIXED", right: "PROS_TOTAL_FIXED" },
-  { label: "임플 누적", left: "PROS_IMPLANT", right: "PROS_TOTAL_IMPLANT" },
+  { label: "가철 누적", left: "PROS_CUM_REMOVABLE", right: "PROS_TOTAL_REMOVABLE" },
+  { label: "고정 누적", left: "PROS_CUM_FIXED", right: "PROS_TOTAL_FIXED" },
+  { label: "임플 누적", left: "PROS_CUM_IMPLANT", right: "PROS_TOTAL_IMPLANT" },
   { label: "임수 누적", left: "PROS_IMPLANT_ASSIST", right: "PROS_TOTAL_IMPLANT_ASSIST" },
+];
+// 비교결과의 보철 행은 현황시트 열 순서대로 보여준다.
+var CASE_PROS_COMPARISON_ORDER = [
+  "PROS_REMOVABLE", "PROS_FIXED", "PROS_IMPLANT", "PROS_IMPLANT_ASSIST", "PROS_CHARTING",
+  "PROS_DIAG_TOTAL", "PROS_STUDENT_EVAL", "PROS_FACULTY_OBS", "PROS_LAB", "PROS_LAB_SCORE",
 ];
 var CASE_UNMAPPED_HEADERS = ["매핑키", "소스키", "현황표시명", "검토상태", "인증대상식", "U-FOLIO 대상", "비고"];
 var CASE_DIAGNOSTIC_HEADERS = ["시각", "소스키", "행", "상태", "상세"];
@@ -113,13 +124,16 @@ function case_refreshAll_(services) {
   mappings.forEach(function (mapping) {
     mapping.measurement = case_effectiveMeasurement_(mapping, measurementSettings);
   });
-  var previous = services.getPreviousSnapshot();
   var latestByKey = services.getLatestUfolio();
   var latestSubmissionAt = services.getLatestSubmissionAt ? services.getLatestSubmissionAt() : {};
   var rosterByAttendance = {};
+  var rosterIds = {};
   services.getRoster().forEach(function (student) {
     rosterByAttendance[case_attendanceKey_(student.attendanceNo)] = student;
+    rosterIds[String(student.studentId)] = true;
   });
+  // 명단에서 빠진 학생은 원본 읽기가 실패해도 이전 스냅샷으로 되살아나지 않는다.
+  var previous = services.getPreviousSnapshot().filter(function (row) { return rosterIds[String(row.studentId)]; });
 
   var snapshotRows = previous.map(case_clone_);
   // 이전 스냅샷을 유지하는(원본 실패 등) 행에도 현재 측정값설정을 다시 적용한다.
@@ -354,7 +368,15 @@ function case_comparisonSort_(left, right) {
   var leftNo = Number(left.attendanceNo);
   var rightNo = Number(right.attendanceNo);
   if (isFinite(leftNo) && isFinite(rightNo) && leftNo !== rightNo) return leftNo - rightNo;
-  return [left.department, left.label].join("|").localeCompare([right.department, right.label].join("|"), "ko");
+  var byDepartment = String(left.department).localeCompare(String(right.department), "ko");
+  if (byDepartment) return byDepartment;
+  var byOrder = case_prosComparisonRank_(left) - case_prosComparisonRank_(right);
+  return byOrder || String(left.label).localeCompare(String(right.label), "ko");
+}
+
+function case_prosComparisonRank_(row) {
+  var rank = CASE_PROS_COMPARISON_ORDER.indexOf(row.mappingKey);
+  return rank < 0 ? CASE_PROS_COMPARISON_ORDER.length : rank;
 }
 
 function case_parseSpreadsheetId_(urlOrId) {
@@ -462,11 +484,93 @@ function case_buildLateReport_(roster, latestSubmissionAt) {
   return { referenceDate: referenceDate, referenceCount: counts[referenceDate] || 0, totalCount: students.length, rows: rows };
 }
 
+function case_rosterFromSheet_(spreadsheet) {
+  return case_sheetRows_(spreadsheet.getSheetByName("학생명단"), 3)
+    .filter(function (row) { return row[0] !== "" && row[1] !== ""; })
+    .map(function (row) { return { attendanceNo: row[0], studentId: row[1], name: row[2] }; })
+    .sort(function (left, right) { return Number(left.attendanceNo) - Number(right.attendanceNo); });
+}
+
+// 번호·이름은 동기화 때 명단에서 쓰고, 전송일시는 수식이라 학생이 전송하는 즉시 바뀐다.
+function case_updateSubmissionCheckSheet_(spreadsheet) {
+  var rows = case_rosterFromSheet_(spreadsheet).map(function (student, index) {
+    var row = index + 2;
+    return [
+      student.attendanceNo,
+      student.name,
+      '=IF(COUNTIF(RAW!$D:$D,$D' + row + ')=0,"미인증",MAXIFS(RAW!$A:$A,RAW!$D:$D,$D' + row + '))',
+      student.studentId,
+    ];
+  });
+  var sheet = spreadsheet.getSheetByName(CASE_SUBMISSION_CHECK_SHEET) || spreadsheet.insertSheet(CASE_SUBMISSION_CHECK_SHEET);
+  var width = CASE_SUBMISSION_CHECK_HEADERS.length;
+  var bodyRows = Math.max(1, sheet.getLastRow() - 1, rows.length);
+  if (sheet.getMaxRows() < bodyRows + 1) sheet.insertRowsAfter(sheet.getMaxRows(), bodyRows + 1 - sheet.getMaxRows());
+  sheet.getRange(1, 1, 1, width).setValues([CASE_SUBMISSION_CHECK_HEADERS])
+    .setBackground("#2F75B5").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center");
+  sheet.getRange(2, 1, bodyRows, width).clearContent();
+  sheet.getRange(2, 3, bodyRows, 1).setNumberFormat("yyyy-mm-dd hh:mm:ss");
+  sheet.getRange(2, 4, bodyRows, 1).setNumberFormat("@");
+  if (rows.length) sheet.getRange(2, 1, rows.length, width).setValues(rows);
+  [70, 110, 210].forEach(function (pixels, index) { sheet.setColumnWidth(index + 1, pixels); });
+  sheet.hideColumns(4);
+  sheet.setFrozenRows(1);
+  sheet.setHiddenGridlines(true);
+  if (sheet.isSheetHidden()) sheet.showSheet();
+}
+
+// 교정과 기공 메뉴의 모든 항목을 학생별로 합산한다. 항목 목록은 마스터항목을 따른다.
+function case_orthoLabRows_(roster, masterRows, latestByKey) {
+  var targets = masterRows.filter(function (row) {
+    return String(row[2]).trim() === "교정과" && String(row[3]).trim() === "기공";
+  }).map(function (row) { return [row[1], row[2], row[3], row[4]].join("|"); }).join("\n");
+  return roster.map(function (student) {
+    var aggregated = case_aggregateUfolio_({ ufolioTargets: targets, measurement: "승인수", aggregation: "SUM" }, latestByKey, student.studentId);
+    return {
+      attendanceNo: student.attendanceNo,
+      name: student.name,
+      approved: aggregated.targetFound ? Number(aggregated.value || 0) : "미인증",
+    };
+  });
+}
+
+// N은 B2 한 칸에 직접 입력한다. 동기화는 3행 아래만 다시 쓰므로 N이 지워지지 않고,
+// 색은 조건부서식이라 N을 바꾸는 즉시 다시 칠해진다.
+function case_updateOrthoLabSheet_(spreadsheet) {
+  var rows = case_orthoLabRows_(
+    case_rosterFromSheet_(spreadsheet),
+    case_sheetRows_(spreadsheet.getSheetByName("마스터항목"), 8),
+    case_latestUfolioFromRows_(case_sheetRows_(spreadsheet.getSheetByName("RAW"), 14)),
+  );
+  var sheet = spreadsheet.getSheetByName(CASE_ORTHO_LAB_SHEET) || spreadsheet.insertSheet(CASE_ORTHO_LAB_SHEET);
+  var width = CASE_ORTHO_LAB_HEADERS.length;
+  var bodyRows = Math.max(1, sheet.getLastRow() - 3, rows.length);
+  if (sheet.getMaxRows() < bodyRows + 3) sheet.insertRowsAfter(sheet.getMaxRows(), bodyRows + 3 - sheet.getMaxRows());
+  sheet.getRange(1, 1, 1, width).breakApart().merge().setValue("교정 기공").setBackground("#17365D").setFontColor("#FFFFFF").setFontSize(16).setFontWeight("bold");
+  sheet.getRange(2, 1).setValue("N 입력").setFontWeight("bold").setBackground("#D9EAF7");
+  sheet.getRange(2, 2).setBackground("#FFF2CC").setDataValidation(
+    SpreadsheetApp.newDataValidation().requireNumberGreaterThanOrEqualTo(0).setAllowInvalid(false).build(),
+  );
+  sheet.getRange(2, 3).setValue("승인수가 N과 같으면 초록, 다르면 노랑").setFontColor("#666666");
+  sheet.getRange(3, 1, 1, width).setValues([CASE_ORTHO_LAB_HEADERS]).setBackground("#2F75B5").setFontColor("#FFFFFF").setFontWeight("bold").setHorizontalAlignment("center");
+  sheet.getRange(4, 1, bodyRows, width).clearContent();
+  if (rows.length) {
+    sheet.getRange(4, 1, rows.length, width).setValues(rows.map(function (row) { return [row.attendanceNo, row.name, row.approved]; }));
+  }
+  var body = sheet.getRange(4, 1, Math.max(1, rows.length), width);
+  sheet.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($B$2<>"",$C4=$B$2)').setBackground("#E2F0D9").setRanges([body]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($B$2<>"",$C4<>$B$2)').setBackground("#FFF2CC").setRanges([body]).build(),
+  ]);
+  [90, 110, 250].forEach(function (pixels, index) { sheet.setColumnWidth(index + 1, pixels); });
+  sheet.setFrozenRows(3);
+  sheet.setHiddenGridlines(true);
+  if (sheet.isSheetHidden()) sheet.showSheet();
+}
+
 function case_updateLateSheet_(spreadsheet) {
   // 외부 현황 읽기 중 들어온 학생 제출도 포함하도록 쓰기 잠금 안에서 RAW를 다시 읽는다.
-  var roster = case_sheetRows_(spreadsheet.getSheetByName("학생명단"), 3)
-    .filter(function (row) { return row[0] !== "" && row[1] !== ""; })
-    .map(function (row) { return { attendanceNo: row[0], studentId: row[1], name: row[2] }; });
+  var roster = case_rosterFromSheet_(spreadsheet);
   var latest = case_latestSubmissionFromRows_(case_sheetRows_(spreadsheet.getSheetByName("RAW"), 14));
   var report = case_buildLateReport_(roster, latest);
   var sheet = spreadsheet.getSheetByName(CASE_LATE_SHEET) || spreadsheet.insertSheet(CASE_LATE_SHEET);
@@ -629,6 +733,8 @@ function refreshIntegratedData() {
       new Date(), normalCount, failedCount, result.snapshotRows.length, result.comparisonRows.length, failedCount ? "일부실패" : "성공",
     ]]);
     case_updateLateSheet_(spreadsheet);
+    case_updateOrthoLabSheet_(spreadsheet);
+    case_updateSubmissionCheckSheet_(spreadsheet);
     dash_updateDashboard_(spreadsheet);
     return result;
   } finally {
@@ -637,7 +743,7 @@ function refreshIntegratedData() {
 }
 
 // 비교결과 행 색: 미인증=연빨강, 측정값 기준 현황값과 불일치=노랑, 일치=연초록.
-// 측정값 열이 승인수/환자수/점수 중 동적으로 바뀌므로 조건부서식 대신 동기화 때 코드가 칠한다.
+// 측정값 열이 승인수/제출건수/환자수/점수 중 동적으로 바뀌므로 조건부서식 대신 동기화 때 코드가 칠한다.
 function case_comparisonRowColor_(row) {
   if (row.ufolioDisplay === "미인증") return "#FCE4D6";
   if (row.status === "일치") return "#E2F0D9";

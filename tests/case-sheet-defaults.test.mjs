@@ -105,7 +105,7 @@ test("approved mappings use the restricted DSL and valid master targets", () => 
   assert.ok(approved.length >= 20);
   for (const mapping of approved) {
     assert.match(mapping["인증대상식"], /^(?:VALUE|NUMBER_OR_ZERO|NONEMPTY_AS_ONE|HAS_STATUS_O|SUM|COUNT_NONEMPTY|COUNT_STATUS)\(.+\)$/);
-    assert.ok(["승인수", "환자수", "점수"].includes(mapping["측정값"]));
+    assert.ok(["승인수", "제출건수", "환자수", "점수"].includes(mapping["측정값"]));
     assert.ok(["SUM", "MAX", "FIRST"].includes(mapping["집계방식"]));
     const targets = String(mapping["U-FOLIO 대상"]).split(/\r?\n/).filter(Boolean);
     assert.ok(targets.length >= 1);

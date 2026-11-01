@@ -158,12 +158,12 @@ function case_defaultMappings_() {
     case_mapping_("PATH_LEDGER", "승인", "PATH", "장부작성", "HAS_STATUS_O(D)", "", "HAS_STATUS_O(D)", case_target_(path, "전 임상실습", "구강병리학적 검사 의뢰서 작성"), "승인수", "SUM", 60, "독립된 O 또는 날짜+O만 인정"),
     case_mapping_("PATH_DIAGNOSIS", "승인", "PATH", "진단 참여", "HAS_STATUS_O(E)", "", "HAS_STATUS_O(E)", case_target_(path, "증례별 임상참여", "육안 검사 및 진단 준비 참여"), "승인수", "SUM", 60, "독립된 O 또는 날짜+O만 인정"),
 
-    case_mapping_("PROS_REMOVABLE", "승인", "PROS", "가철 누적", "VALUE(D)", "VALUE(E)", "VALUE(G)", case_target_(pros, "Total Case", "Total case evaluation (가철성)"), "승인수", "SUM", 60, "예정 포함 누적"),
-    case_mapping_("PROS_FIXED", "승인", "PROS", "고정 누적", "VALUE(H)", "VALUE(J)", "VALUE(K)", case_target_(pros, "Total Case", "Total case evaluation (고정성)"), "승인수", "SUM", 60, "예정 포함 누적"),
-    case_mapping_("PROS_IMPLANT", "승인", "PROS", "Implant 누적", "VALUE(L)", "VALUE(M)", "VALUE(N)", case_target_(pros, "Total Case", "Total case evaluation (Implant)"), "승인수", "SUM", 60, "예정 포함 누적"),
+    case_mapping_("PROS_REMOVABLE", "승인", "PROS", "가철 완료", "VALUE(D)", "VALUE(E)", "VALUE(D)", case_target_(pros, "Total Case", "Total case evaluation (가철성)"), "승인수", "SUM", 60, "완료값과 유폴리오 승인수 비교"),
+    case_mapping_("PROS_FIXED", "승인", "PROS", "고정 완료", "VALUE(H)", "VALUE(J)", "VALUE(H)", case_target_(pros, "Total Case", "Total case evaluation (고정성)"), "승인수", "SUM", 60, "완료값과 유폴리오 승인수 비교"),
+    case_mapping_("PROS_IMPLANT", "승인", "PROS", "임플 완료", "VALUE(L)", "VALUE(M)", "VALUE(L)", case_target_(pros, "Total Case", "Total case evaluation (Implant)"), "승인수", "SUM", 60, "완료값과 유폴리오 승인수 비교"),
     case_mapping_("PROS_IMPLANT_ASSIST", "승인", "PROS", "임수 누적", "VALUE(O)", "VALUE(P)", "VALUE(Q)", case_target_(pros, "증례별 임상참여", "03. Implant assist"), "승인수", "SUM", 60, "예정 포함 누적"),
-    case_mapping_("PROS_CHARTING", "승인", "PROS", "Charting", "VALUE(S)", "", "VALUE(S)", case_target_(pros, "증례별 임상참여", "22. Charting"), "승인수", "SUM", 60, "차팅 건수"),
-    case_mapping_("PROS_DIAG_TOTAL", "승인", "PROS", "진토", "VALUE(T)", "", "VALUE(T)", case_target_(pros, "Total Case", "Charting and Treatment planning evaluation"), "승인수", "SUM", 60, "22~25 단계 묶음 Total case"),
+    case_mapping_("PROS_CHARTING", "승인", "PROS", "차팅", "VALUE(S)", "", "VALUE(S)", case_target_(pros, "증례별 임상참여", "22. Charting"), "제출건수", "SUM", 60, "차팅 건수와 유폴리오 제출건수 비교"),
+    case_mapping_("PROS_DIAG_TOTAL", "승인", "PROS", "진토", "VALUE(T)", "", "VALUE(T)", case_target_(pros, "Total Case", "Charting and Treatment planning evaluation"), "제출건수", "SUM", 60, "22~25 단계 묶음 Total case와 유폴리오 제출건수 비교"),
     case_mapping_("PROS_STUDENT_EVAL", "승인", "PROS", "단타", "VALUE(U)", "", "VALUE(U)", case_target_(pros, "증례별 임상참여", "01. Student evaluation"), "점수", "SUM", 60, "어시 시간 기반 점수"),
     case_mapping_("PROS_FACULTY_OBS", "승인", "PROS", "교픽", "VALUE(V)", "", "VALUE(V)", case_target_(pros, "증례별 임상참여", "02. observation (교수님)"), "점수", "SUM", 60, "교수 진료 observation 점수"),
     case_mapping_("PROS_LAB", "승인", "PROS", "기공 승인 건수", "VALUE(X)", "", "VALUE(X)", [case_target_(pros, "기공", "[가철성]Laboratory case evaluation"), case_target_(pros, "기공", "[고정성]Laboratory case evaluation"), case_target_(pros, "기공", "[임플란트]Laboratory case evaluation")].join("\n"), "승인수", "SUM", 60, "X열은 세 기공 항목의 승인 건수 합계"),
@@ -181,6 +181,9 @@ function case_defaultMappings_() {
     case_mapping_("RADIO_IO", "승인", "RADIO", "IO 매수", "VALUE(D)", "", "VALUE(D)", case_target_(radio, "증례별 임상참여", "구내 촬영 및 판독"), "환자수", "SUM", 60, "IO 매수(BW 포함)와 촬영 환자수 비교"),
 
     // 보철비교 시트 전용: PROS 매핑과 같은 U-FOLIO 대상을 쓰되 우선순위를 낮춰 비교결과에는 PROS만 남긴다.
+    case_mapping_("PROS_CUM_REMOVABLE", "승인", "PROS", "가철 누적(현황조사)", "VALUE(D)", "VALUE(E)", "VALUE(G)", case_target_(pros, "Total Case", "Total case evaluation (가철성)"), "승인수", "SUM", 50, "보철비교용; 예정 포함 누적"),
+    case_mapping_("PROS_CUM_FIXED", "승인", "PROS", "고정 누적(현황조사)", "VALUE(H)", "VALUE(J)", "VALUE(K)", case_target_(pros, "Total Case", "Total case evaluation (고정성)"), "승인수", "SUM", 50, "보철비교용; 예정 포함 누적"),
+    case_mapping_("PROS_CUM_IMPLANT", "승인", "PROS", "임플 누적(현황조사)", "VALUE(L)", "VALUE(M)", "VALUE(N)", case_target_(pros, "Total Case", "Total case evaluation (Implant)"), "승인수", "SUM", 50, "보철비교용; 예정 포함 누적"),
     case_mapping_("PROS_TOTAL_REMOVABLE", "승인", "PROS_TOTAL", "가철 누적(토탈시트)", "VALUE(D)", "", "VALUE(D)", case_target_(pros, "Total Case", "Total case evaluation (가철성)"), "승인수", "SUM", 50, "보철비교용"),
     case_mapping_("PROS_TOTAL_FIXED", "승인", "PROS_TOTAL", "고정 누적(토탈시트)", "VALUE(F)", "", "VALUE(F)", case_target_(pros, "Total Case", "Total case evaluation (고정성)"), "승인수", "SUM", 50, "보철비교용"),
     case_mapping_("PROS_TOTAL_IMPLANT", "승인", "PROS_TOTAL", "임플 누적(토탈시트)", "VALUE(H)", "", "VALUE(H)", case_target_(pros, "Total Case", "Total case evaluation (Implant)"), "승인수", "SUM", 50, "보철비교용"),

@@ -16,7 +16,7 @@ var SYS_COLORS = {
 };
 
 // 관리자 화면은 보이고 시스템 시트는 숨긴다. (숨긴 시트는 시트 목록 ☰ 에서 다시 열 수 있다)
-var SYS_VISIBLE_SHEETS = ["대시보드", "비교결과", "지각자", "보철비교", "현황시트연결", "측정값설정"];
+var SYS_VISIBLE_SHEETS = ["대시보드", "비교결과", "지각자", "보철비교", "교정기공", "전송확인", "현황시트연결", "측정값설정"];
 var SYS_HIDDEN_SHEETS = [
   "항목매핑", "미매핑항목", "연결진단", "동기화로그", "현황최신", "유폴리오최신",
   "마스터항목", "학생명단", "RAW", "전송기록", "설정", "차트데이터", "사용안내",
@@ -32,9 +32,12 @@ function onOpen() {
     .addItem("지금 전체 동기화", "refreshIntegratedData")
     .addItem("측정값 변경 적용", "applyMeasurementSettings")
     .addItem("소아치과 총점 현황 적용", "applyPediatricScoreMappings")
+    .addItem("보철 비교 기준 적용", "applyProsComparisonRules")
+    .addItem("학생용 전송 확인 파일 만들기", "createStudentSubmissionFile")
     .addSeparator()
     .addItem("RAW 과거 제출 정리(최신만 남기기)", "compactRawSheet")
     .addItem("점수 안받음 정책 기존 RAW 적용", "redactScoreNotCollectedData")
+    .addItem("명단에서 뺀 학생 RAW 삭제", "removeNonRosterRawRows")
     .addItem("화면 구성 새로 적용", "applyUnifiedWorkbookLayout")
     .addSeparator()
     .addItem("매일 새벽 3시 동기화 켜기", "installDailyRefreshTrigger")
@@ -58,8 +61,10 @@ function applyUnifiedWorkbookLayout() {
   sys_writeGuide_(guide, "유폴리오 통합 시트", sys_adminGuideLines_());
   dash_updateDashboard_(spreadsheet);
   case_updateLateSheet_(spreadsheet);
+  case_updateOrthoLabSheet_(spreadsheet);
+  case_updateSubmissionCheckSheet_(spreadsheet);
   sys_reorderAndHideSheets_(spreadsheet);
-  spreadsheet.toast("화면 구성을 적용했습니다. 대시보드·비교결과·지각자·보철비교·현황시트연결·측정값설정이 표시됩니다.");
+  spreadsheet.toast("화면 구성을 적용했습니다. 대시보드·비교결과·지각자·보철비교·교정기공·전송확인·현황시트연결·측정값설정이 표시됩니다.");
 }
 
 // 예전 ② 통합관리자 파일의 데이터(현황시트 URL, 매핑 검토상태, 이력)를 이 파일로 1회 이관한다.
@@ -113,6 +118,45 @@ function applyPediatricScoreMappings() {
   sys_seedMeasurementSettings_(spreadsheet, sys_measurementDefaults_(mappings));
   sys_applyAdminFormats_(spreadsheet);
   spreadsheet.toast("소아치과 총점 현황 8개 항목을 적용했습니다. 현황시트연결의 PED_SCORE 행에 원본 URL을 입력한 뒤 지금 전체 동기화를 실행하세요.");
+}
+
+// 보철 매핑(완료값 비교·누적 전용 행)과 차팅·진토의 제출건수 기준을 기존 운영 파일에 적용한다.
+// 측정값설정이 매핑보다 우선하므로 이 두 항목만 덮어쓰고 나머지 선택은 보존한다.
+function applyProsComparisonRules() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var mappings = case_defaultMappings_().filter(function (row) { return row[3] === "PROS"; });
+  sys_ensureIntegrationSheets_(spreadsheet);
+  sys_seedRows_(spreadsheet.getSheetByName(CASE_MAPPING_SHEET), CASE_MAPPING_HEADERS, mappings, 0);
+  sys_seedMeasurementSettings_(spreadsheet, sys_measurementDefaults_(mappings.filter(function (row) {
+    return row[0] === "PROS_CHARTING" || row[0] === "PROS_DIAG_TOTAL";
+  })));
+  sys_applyAdminFormats_(spreadsheet);
+  spreadsheet.toast("보철 비교 기준을 적용했습니다. 지금 전체 동기화를 실행하세요.");
+}
+
+// 학생에게 공유할 별도 파일. 통합 파일의 전송확인 A:C만 IMPORTRANGE로 가져오므로 다른 시트는 노출되지 않는다.
+function createStudentSubmissionFile() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var existingUrl = String(sys_getSettings_(spreadsheet).SUBMISSION_CHECK_URL || "").trim();
+  if (existingUrl) {
+    ui.alert("학생용 전송 확인 파일이 이미 있습니다.\n\n" + existingUrl);
+    return;
+  }
+  case_updateSubmissionCheckSheet_(spreadsheet);
+  var file = SpreadsheetApp.create("유폴 인증 전송 확인");
+  file.setSpreadsheetTimeZone("Asia/Seoul");
+  var sheet = file.getSheets()[0];
+  sheet.setName(CASE_SUBMISSION_CHECK_SHEET);
+  sheet.getRange(1, 1).setFormula('=IMPORTRANGE("' + spreadsheet.getId() + '","' + CASE_SUBMISSION_CHECK_SHEET + '!A:C")');
+  sheet.getRange("C2:C").setNumberFormat("yyyy-mm-dd hh:mm:ss");
+  sys_styleHeader_(sheet.getRange(1, 1, 1, 3));
+  [70, 110, 210].forEach(function (pixels, index) { sheet.setColumnWidth(index + 1, pixels); });
+  sheet.setFrozenRows(1);
+  sys_setSettings_(spreadsheet, { SUBMISSION_CHECK_URL: file.getUrl() });
+  ui.alert(
+    "학생용 파일을 만들었습니다.\n\n" + file.getUrl() + "\n\n1. 파일을 열고 A1 셀의 [액세스 허용]을 누릅니다.\n2. 공유 → 링크가 있는 모든 사용자 → 뷰어로 설정한 뒤 학생에게 링크를 전달합니다.",
+  );
 }
 
 function sys_ensureIntegrationSheets_(spreadsheet) {
@@ -204,8 +248,11 @@ function sys_adminGuideLines_() {
     "비교결과에는 제출수·승인수·환자수·점수가 모두 표시됩니다. '미인증'(빨강)은 그 학생이 해당 항목 인증을 아직 보내지 않은 것입니다.",
     "치주 Flap/Implant Assist, 외과 수술실 5개 항목, 영상 판독 토론 및 평가의 점수는 수집하지 않으며, 점수 칸에는 '안받음'이 표시됩니다. 승인수·미승인·환자수는 계속 표시됩니다.",
     "비교결과 행 색: 측정값으로 고른 값이 현황값과 다르면 노랑, 같으면 초록, 미인증이면 빨강입니다.",
+    "비교결과의 보철 행은 가철 완료·고정 완료·임플 완료·임수 누적·차팅·진토·단타·교픽·기공 순입니다. 차팅·진토는 유폴리오 제출건수와 비교합니다.",
     "보철비교에서는 보철 현황조사와 개인별토탈 시트의 같은 항목(가철·고정·임플·임수 누적, 예정 포함)을 나란히 비교하고 유폴리오 값을 참고로 보여줍니다.",
-    "측정값설정에서 항목별로 승인수/환자수/점수 중 무엇으로 비교·집계할지 고를 수 있습니다. 바꾼 뒤 지금 전체 동기화를 실행하면 반영됩니다.",
+    "교정기공의 B2에 N을 입력하면 학생별 교정 기공 승인수 누적과 비교해 같으면 초록, 다르면 노랑으로 표시합니다.",
+    "전송확인은 학생별 최신 유폴 인증 전송일시입니다. 학생에게는 메뉴 [학생용 전송 확인 파일 만들기]로 만든 별도 파일만 공유합니다.",
+    "측정값설정에서 항목별로 승인수/제출건수/환자수/점수 중 무엇으로 비교·집계할지 고를 수 있습니다. 바꾼 뒤 지금 전체 동기화를 실행하면 반영됩니다.",
     "현황시트연결은 원본 시트 URL이 바뀔 때만 수정합니다. 노란 셀이 관리자 입력 영역입니다.",
     "나머지 시트(RAW, 항목매핑, 연결진단 등)는 시스템 운영용이라 숨겨져 있습니다. 좌측 하단 시트 목록(☰)에서 다시 열 수 있습니다.",
     "동기화가 정상인 것을 확인한 뒤 매일 새벽 3시 동기화를 켭니다.",
@@ -242,7 +289,7 @@ function sys_applyAdminFormats_(spreadsheet) {
       SpreadsheetApp.newDataValidation().requireValueInList(["승인", "검토필요", "보류"], true).setAllowInvalid(false).build(),
     );
     mappings.getRange(2, 10, mappingRows, 1).setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInList(["승인수", "환자수", "점수"], true).setAllowInvalid(false).build(),
+      SpreadsheetApp.newDataValidation().requireValueInList(CASE_MEASUREMENT_CHOICES, true).setAllowInvalid(false).build(),
     );
     mappings.getRange(2, 11, mappingRows, 1).setDataValidation(
       SpreadsheetApp.newDataValidation().requireValueInList(["SUM", "MAX", "FIRST"], true).setAllowInvalid(false).build(),
@@ -291,6 +338,8 @@ function sys_reorderAndHideSheets_(spreadsheet) {
     "대시보드": SYS_COLORS.navy,
     "비교결과": SYS_COLORS.blue,
     "보철비교": SYS_COLORS.blue,
+    "교정기공": SYS_COLORS.blue,
+    "전송확인": SYS_COLORS.blue,
     "지각자": SYS_COLORS.orange,
     "현황시트연결": "#FFD966",
     "측정값설정": "#FFD966",
@@ -408,8 +457,9 @@ function sys_setSettings_(spreadsheet, updates) {
     ADMIN_SPREADSHEET_ID: "(구) 통합 관리자 파일 ID — 이관 후 비움",
     ADMIN_SPREADSHEET_URL: "(구) 관리자 파일 URL — 이관 후 비움",
     LAST_REFRESHED_AT: "마지막 통합 동기화 시각",
+    SUBMISSION_CHECK_URL: "학생용 전송 확인 파일 URL",
   };
-  var preferred = ["SITE_SPREADSHEET_ID", "ADMIN_SPREADSHEET_ID", "ADMIN_SPREADSHEET_URL", "LAST_REFRESHED_AT"];
+  var preferred = ["SITE_SPREADSHEET_ID", "ADMIN_SPREADSHEET_ID", "ADMIN_SPREADSHEET_URL", "LAST_REFRESHED_AT", "SUBMISSION_CHECK_URL"];
   var rows = preferred.filter(function (key) { return Object.prototype.hasOwnProperty.call(existing, key); }).map(function (key) {
     return [key, existing[key], descriptions[key] || ""];
   });

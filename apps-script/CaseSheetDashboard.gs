@@ -79,7 +79,7 @@ function dash_visibleItems_(items, mappingRows) {
 }
 
 // 유폴리오 최신 제출 기준: 마스터 항목(행) × 학생(열) 값 매트릭스.
-// 각 항목의 값은 측정값설정 시트에서 고른 측정값(승인수/환자수/점수)을 따른다.
+// 각 항목의 값은 측정값설정 시트에서 고른 측정값(승인수/제출건수/환자수/점수)을 따른다.
 function dash_buildMatrix_(items, students, latestByKey, settings, submittedAt) {
   var sorted = students.slice().sort(function (left, right) {
     var leftNo = Number(left.attendanceNo);
