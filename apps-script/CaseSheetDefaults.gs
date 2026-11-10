@@ -178,7 +178,9 @@ function case_defaultMappings_() {
     case_mapping_("ORTHO_BONDING_TOTAL", "승인", "ORTHO", "본토 완료", "VALUE(H)", "", "VALUE(H)", case_target_(ortho, "Total Case", "Total Case(신환)"), "승인수", "SUM", 60, "본딩 total 완료 건수와 신환 Total Case 승인수 비교"),
     case_mapping_("ORTHO_BONDING_ASSIST", "승인", "ORTHO", "본딩 단타 승인", "VALUE(I)", "", "VALUE(I)", case_target_(ortho, "증례별 임상참여", "Assist case - Bonding"), "승인수", "SUM", 60, "2026-08 시트 개편: 본딩 단타 승인 건수 J열→I열"),
 
-    case_mapping_("RADIO_IO", "승인", "RADIO", "IO 매수", "VALUE(D)", "", "VALUE(D)", case_target_(radio, "증례별 임상참여", "구내 촬영 및 판독"), "환자수", "SUM", 60, "IO 매수(BW 포함)와 촬영 환자수 비교"),
+    // 2026-11 시트 개편: D열에 IO 점수가 추가되어 IO 매수는 C열이다.
+    case_mapping_("RADIO_IO", "승인", "RADIO", "IO 매수", "VALUE(C)", "", "VALUE(C)", case_target_(radio, "증례별 임상참여", "구내 촬영 및 판독"), "환자수", "SUM", 60, "IO 매수(BW 포함, C열)와 촬영 환자수 비교"),
+    case_mapping_("RADIO_IO_SCORE", "승인", "RADIO", "IO 점수", "VALUE(D)", "", "VALUE(D)", case_target_(radio, "증례별 임상참여", "구내 촬영 및 판독"), "점수", "SUM", 60, "IO 점수(미서명 장당 1점 포함, D열)와 유폴리오 점수 비교"),
 
     // 보철비교 시트 전용: PROS 매핑과 같은 U-FOLIO 대상을 쓰되 우선순위를 낮춰 비교결과에는 PROS만 남긴다.
     case_mapping_("PROS_CUM_REMOVABLE", "승인", "PROS", "가철 누적(현황조사)", "VALUE(D)", "VALUE(E)", "VALUE(G)", case_target_(pros, "Total Case", "Total case evaluation (가철성)"), "승인수", "SUM", 50, "보철비교용; 예정 포함 누적"),
