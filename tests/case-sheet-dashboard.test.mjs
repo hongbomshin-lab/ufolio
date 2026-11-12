@@ -120,6 +120,19 @@ test("dashboard hides unmapped OMS/prosthodontics items but keeps other departme
   );
 });
 
+test("dashboard shows OMS Implant 2nd op A through the default Implant A mapping", () => {
+  const dash = loadDashboard();
+  vm.runInContext(readFileSync("apps-script/CaseSheetDefaults.gs", "utf8"), dash);
+  const master = JSON.parse(readFileSync("config/ufolio-master-items.json", "utf8"));
+  const items = master.departments["구강악안면외과"].map(([menu, name]) => item("구강악안면외과", menu, name));
+  const visible = dash.dash_visibleItems_(items, dash.case_defaultMappings_()).map((row) => row.item);
+  for (const name of ["Implant 1st op. (2개 이하 식립)_[A]", "Implant 1st op (3개 이상 식립)_[A]", "Implant 2nd op_[A]"]) {
+    assert.ok(visible.includes(name), `대시보드 누락: ${name}`);
+  }
+  // O 항목은 매핑이 없어 북마클릿이 보내지 않으므로 계속 숨긴다.
+  assert.equal(visible.includes("Implant 2nd op._[O]"), false);
+});
+
 test("distribution counts people per distinct value and skips blanks", () => {
   const dash = loadDashboard();
   assert.deepEqual(Array.from(dash.dash_distribution_([2, "", 1, 2, 2, "", 0]), (row) => Array.from(row)), [
