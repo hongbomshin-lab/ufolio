@@ -312,6 +312,50 @@ test("radio compares IO count (C) and IO score (D) as two rows despite the seede
   assert.equal(rows["s2|RADIO_IO_SCORE"].status, "현황누락의심");
 });
 
+test("OMS Implant A (K) is compared with the summed approvals of 1st op ≤2, 1st op ≥3 and 2nd op A", () => {
+  const context = vm.createContext({ console, Date });
+  for (const file of ["CaseSheetCore", "CaseSheetDefaults", "CaseSheetSync"]) {
+    vm.runInContext(readFileSync(`apps-script/${file}.gs`, "utf8"), context);
+  }
+  const connection = context.case_connectionObject_(context.case_defaultConnections_().find((row) => row[0] === "OMS"));
+  const mappings = context.case_defaultMappings_().filter((row) => row[0] === "OMS_IMPLANT_A")
+    .map((row) => context.case_mappingObject_(row, { OMS: "구강악안면외과" }));
+  const prefix = "3학년 치의학 임상실습 2|구강악안면외과|증례별 임상참여|";
+  const first = `${prefix}Implant 1st op. (2개 이하 식립)_[A]`;
+  const result = context.case_refreshAll_({
+    now: () => new Date("2026-11-12T03:00:00.000Z"),
+    getConnections: () => [{ ...connection, url: "oms-sheet" }],
+    getMappings: () => mappings,
+    getMeasurementSettings: () => ({ [first]: "승인수" }),
+    getRoster: () => [
+      { attendanceNo: 1, studentId: "s1", name: "학생일" },
+      { attendanceNo: 2, studentId: "s2", name: "학생이" },
+    ],
+    getPreviousSnapshot: () => [],
+    getLatestUfolio: () => ({
+      [`s1|${first}`]: latestRecord(1, 0),
+      [`s1|${prefix}Implant 1st op (3개 이상 식립)_[A]`]: latestRecord(1, 0),
+      [`s1|${prefix}Implant 2nd op_[A]`]: latestRecord(2, 1),
+      [`s2|${first}`]: latestRecord(2, 0),
+      [`s2|${prefix}Implant 1st op (3개 이상 식립)_[A]`]: latestRecord(0, 0),
+    }),
+    // A 출석번호, B 이름, K Implant A
+    readSource: () => [
+      { rowNumber: 5, values: [1, "학생일", "", "", "", "", "", "", "", "", 4] },
+      { rowNumber: 6, values: [2, "학생이", "", "", "", "", "", "", "", "", 2] },
+    ],
+  });
+  const rows = Object.fromEntries(result.comparisonRows.map((row) => [row.studentId, row]));
+  assert.equal(rows.s1.label, "Implant A");
+  assert.equal(rows.s1.sourceValue, 4);
+  assert.equal(rows.s1.ufolioValue, 4);
+  assert.equal(rows.s1.pendingWait, 1);
+  assert.equal(rows.s1.status, "일치");
+  // 2nd op 항목을 아직 안 보낸 학생도 나머지 두 항목 합으로 비교된다.
+  assert.equal(rows.s2.ufolioValue, 2);
+  assert.equal(rows.s2.status, "일치");
+});
+
 test("latest u-folio rows keep the pending count and per-student submission time", () => {
   const sync = loadSync();
   const rawRows = [

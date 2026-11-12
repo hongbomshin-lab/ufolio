@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
 
 import {
   buildBookmarklet,
@@ -177,6 +179,27 @@ test("buildBookmarklet embeds the OMS/prosthodontics allowlist and filters items
   ]) {
     assert.ok(source.includes(required), `허용 목록 누락: ${required}`);
   }
+});
+
+test("OMS/prosthodontics allowlist covers every active approved mapping target", () => {
+  // 외과·보철은 허용목록에 없는 항목을 아예 안 보낸다. 매핑만 추가하고 목록을 빠뜨리면 비교값이 영원히 비어 버린다.
+  const source = readFileSync("bookmarklet.js", "utf8");
+  const literal = source.match(/const RESTRICTED_DEPARTMENT_ITEMS = (\{[\s\S]*?\n {4}\});/);
+  assert.ok(literal, "RESTRICTED_DEPARTMENT_ITEMS 를 찾지 못했습니다");
+  const allowed = vm.runInNewContext(`(${literal[1]})`);
+  const defaults = vm.createContext({ console });
+  vm.runInContext(readFileSync("apps-script/CaseSheetDefaults.gs", "utf8"), defaults);
+  const missing = [];
+  for (const row of defaults.case_defaultMappings_()) {
+    if (String(row[1]).toUpperCase() !== "Y" || row[2] !== "승인") continue;
+    for (const line of String(row[8]).split("\n")) {
+      const [, department, menu, item] = line.split("|");
+      if (!allowed[department]) continue;
+      if (!allowed[department].includes(`${menu}|${item}`)) missing.push(`${row[0]}: ${department}|${menu}|${item}`);
+    }
+  }
+  assert.deepEqual(missing, []);
+  assert.ok(allowed["구강악안면외과"].includes("증례별 임상참여|Implant 2nd op_[A]"));
 });
 
 test("buildBookmarklet rejects missing or non-Apps-Script URLs", () => {

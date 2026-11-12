@@ -153,7 +153,7 @@ function case_defaultMappings_() {
     case_mapping_("OMS_NEW_CHART", "승인", "OMS", "신환 차팅", "VALUE(S)", "", "VALUE(S)", case_target_(oms, "증례별 임상참여", "외래 신환 차팅"), "환자수", "SUM", 70, "외과 확인: 승인수가 아니라 환자수로 비교"),
     case_mapping_("OMS_WARD", "승인", "OMS", "병동", "VALUE(U)", "", "VALUE(U)", case_target_(oms, "증례별 임상참여", "병동 및 당직"), "점수", "SUM", 70, ""),
     case_mapping_("OMS_LAB", "승인", "OMS", "기공", "VALUE(V)", "", "VALUE(V)", case_target_(oms, "기공", "모델 제작 (악당)"), "승인수", "SUM", 70, ""),
-    case_mapping_("OMS_IMPLANT_A", "승인", "OMS", "Implant A", "VALUE(K)", "", "VALUE(K)", [case_target_(oms, "증례별 임상참여", "Implant 1st op. (2개 이하 식립)_[A]"), case_target_(oms, "증례별 임상참여", "Implant 1st op (3개 이상 식립)_[A]")].join("\n"), "승인수", "SUM", 70, "원본이 식립 개수를 구분하지 않아 두 A 항목 합산"),
+    case_mapping_("OMS_IMPLANT_A", "승인", "OMS", "Implant A", "VALUE(K)", "", "VALUE(K)", [case_target_(oms, "증례별 임상참여", "Implant 1st op. (2개 이하 식립)_[A]"), case_target_(oms, "증례별 임상참여", "Implant 1st op (3개 이상 식립)_[A]"), case_target_(oms, "증례별 임상참여", "Implant 2nd op_[A]")].join("\n"), "승인수", "SUM", 70, "원본 K열은 1st op(식립 개수 무관)·2nd op A 승인수 합"),
 
     case_mapping_("PATH_LEDGER", "승인", "PATH", "장부작성", "HAS_STATUS_O(D)", "", "HAS_STATUS_O(D)", case_target_(path, "전 임상실습", "구강병리학적 검사 의뢰서 작성"), "승인수", "SUM", 60, "독립된 O 또는 날짜+O만 인정"),
     case_mapping_("PATH_DIAGNOSIS", "승인", "PATH", "진단 참여", "HAS_STATUS_O(E)", "", "HAS_STATUS_O(E)", case_target_(path, "증례별 임상참여", "육안 검사 및 진단 준비 참여"), "승인수", "SUM", 60, "독립된 O 또는 날짜+O만 인정"),

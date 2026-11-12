@@ -109,6 +109,7 @@ function bookmarkletRuntime(webAppUrl, scoreNotCollectedItemKeys) {
         "증례별 임상참여|병동 및 당직",
         "증례별 임상참여|Implant 1st op. (2개 이하 식립)_[A]",
         "증례별 임상참여|Implant 1st op (3개 이상 식립)_[A]",
+        "증례별 임상참여|Implant 2nd op_[A]",
         "증례별 임상참여|Biopsy",
         "증례별 임상참여|follow-up(Biopsy)",
         "증례별 임상참여|I & D",

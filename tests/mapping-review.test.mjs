@@ -80,8 +80,13 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.equal(mappings.OMS_RECALL_MAJOR[9], "환자수");
   assert.equal(mappings.OMS_RECALL_MINOR[9], "환자수");
   assert.equal(mappings.OMS_NEW_CHART[9], "환자수");
-  assert.match(mappings.OMS_IMPLANT_A[8], /2개 이하 식립\)_\[A\]/);
-  assert.match(mappings.OMS_IMPLANT_A[8], /3개 이상 식립\)_\[A\]/);
+  // 현황시트 K열 Implant A = 1st op(2개 이하·3개 이상) A + 2nd op A 승인수 합.
+  assert.deepEqual(mappings.OMS_IMPLANT_A[8].split("\n").map((line) => line.split("|")[3]), [
+    "Implant 1st op. (2개 이하 식립)_[A]",
+    "Implant 1st op (3개 이상 식립)_[A]",
+    "Implant 2nd op_[A]",
+  ]);
+  assert.equal(mappings.OMS_IMPLANT_A[9], "승인수");
   assert.equal(mappings.OMS_WARD[9], "점수");
   assert.equal(mappings.OMS_BIOPSY[1], "N");
   assert.equal(mappings.OMS_I_D[1], "N");
