@@ -121,8 +121,17 @@ function case_refreshAll_(services) {
   var connections = services.getConnections().filter(function (row) { return String(row.active).toUpperCase() === "Y"; });
   var mappings = services.getMappings().filter(function (row) { return String(row.active).toUpperCase() === "Y"; });
   var measurementSettings = services.getMeasurementSettings ? services.getMeasurementSettings() : {};
+  // 같은 항목을 측정값을 나눠 비교하는 매핑(영상 IO 매수·점수, 보철 기공 승인수·점수)은
+  // 측정값설정 한 칸으로 덮으면 한 행으로 합쳐져 사라지므로 각 매핑의 측정값을 그대로 쓴다.
+  var ownMeasurementsByTarget = {};
   mappings.forEach(function (mapping) {
-    mapping.measurement = case_effectiveMeasurement_(mapping, measurementSettings);
+    var key = case_firstTargetKey_(mapping.ufolioTargets);
+    ownMeasurementsByTarget[key] = ownMeasurementsByTarget[key] || {};
+    ownMeasurementsByTarget[key][case_effectiveMeasurement_(mapping, {})] = true;
+  });
+  mappings.forEach(function (mapping) {
+    var split = Object.keys(ownMeasurementsByTarget[case_firstTargetKey_(mapping.ufolioTargets)]).length > 1;
+    mapping.measurement = case_effectiveMeasurement_(mapping, split ? {} : measurementSettings);
   });
   var latestByKey = services.getLatestUfolio();
   var latestSubmissionAt = services.getLatestSubmissionAt ? services.getLatestSubmissionAt() : {};

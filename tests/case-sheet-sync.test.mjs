@@ -266,6 +266,52 @@ test("measurement settings sheet overrides the mapping measurement", () => {
   assert.equal(result.comparisonRows[0].status, "일치");
 });
 
+test("radio compares IO count (C) and IO score (D) as two rows despite the seeded measurement setting", () => {
+  const context = vm.createContext({ console, Date });
+  for (const file of ["CaseSheetCore", "CaseSheetDefaults", "CaseSheetSync"]) {
+    vm.runInContext(readFileSync(`apps-script/${file}.gs`, "utf8"), context);
+  }
+  const connection = context.case_connectionObject_(context.case_defaultConnections_().find((row) => row[0] === "RADIO"));
+  const mappings = context.case_defaultMappings_().filter((row) => row[3] === "RADIO")
+    .map((row) => context.case_mappingObject_(row, { RADIO: "영상치의학과" }));
+  assert.deepEqual(Array.from(context.case_requiredColumns_(connection, mappings)), ["A", "B", "C", "D"]);
+  const target = "3학년 치의학 임상실습 2|영상치의학과|증례별 임상참여|구내 촬영 및 판독";
+  const result = context.case_refreshAll_({
+    now: () => new Date("2026-11-11T03:00:00.000Z"),
+    getConnections: () => [{ ...connection, url: "radio-sheet" }],
+    getMappings: () => mappings,
+    // 측정값설정은 항목당 한 칸이라 RADIO_IO 기본값(환자수)으로 채워져 있다.
+    getMeasurementSettings: () => ({ [target]: "환자수" }),
+    getRoster: () => [
+      { attendanceNo: 1, studentId: "s1", name: "학생일" },
+      { attendanceNo: 2, studentId: "s2", name: "학생이" },
+    ],
+    getPreviousSnapshot: () => [],
+    getLatestUfolio: () => ({
+      [`s1|${target}`]: { approvedCount: 30, patientCount: 30, score: 22.5, pendingCount: 0 },
+      [`s2|${target}`]: { approvedCount: 19, patientCount: 19, score: 19, pendingCount: 0 },
+    }),
+    // A 출석번호, B 이름, C IO 매수, D IO 점수(빈칸 가능), E BW 인정 건수
+    readSource: () => [
+      { rowNumber: 5, values: [1, "학생일", 30, 22.5, 1] },
+      { rowNumber: 6, values: [2, "학생이", 19, "", 2] },
+    ],
+  });
+  const rows = Object.fromEntries(result.comparisonRows.map((row) => [`${row.studentId}|${row.mappingKey}`, row]));
+  assert.deepEqual(Object.keys(rows).sort(), ["s1|RADIO_IO", "s1|RADIO_IO_SCORE", "s2|RADIO_IO", "s2|RADIO_IO_SCORE"]);
+  assert.equal(rows["s1|RADIO_IO"].measurement, "환자수");
+  assert.equal(rows["s1|RADIO_IO"].sourceValue, 30);
+  assert.equal(rows["s1|RADIO_IO"].status, "일치");
+  assert.equal(rows["s1|RADIO_IO_SCORE"].label, "IO 점수");
+  assert.equal(rows["s1|RADIO_IO_SCORE"].measurement, "점수");
+  assert.equal(rows["s1|RADIO_IO_SCORE"].sourceValue, 22.5);
+  assert.equal(rows["s1|RADIO_IO_SCORE"].ufolioValue, 22.5);
+  assert.equal(rows["s1|RADIO_IO_SCORE"].status, "일치");
+  // IO 점수 빈칸은 다른 집계식처럼 0으로 보고 유폴리오 점수와 비교한다.
+  assert.equal(rows["s2|RADIO_IO_SCORE"].sourceValue, 0);
+  assert.equal(rows["s2|RADIO_IO_SCORE"].status, "현황누락의심");
+});
+
 test("latest u-folio rows keep the pending count and per-student submission time", () => {
   const sync = loadSync();
   const rawRows = [
