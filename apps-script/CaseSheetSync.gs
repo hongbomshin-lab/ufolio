@@ -142,7 +142,14 @@ function case_refreshAll_(services) {
     rosterIds[String(student.studentId)] = true;
   });
   // 명단에서 빠진 학생은 원본 읽기가 실패해도 이전 스냅샷으로 되살아나지 않는다.
-  var previous = services.getPreviousSnapshot().filter(function (row) { return rosterIds[String(row.studentId)]; });
+  // 비활성으로 바꾼 매핑의 이전 스냅샷도 남기지 않고, 검토상태는 현재 매핑을 따른다.
+  // (그대로 두면 끈 매핑의 예전 '승인' 행이 비교결과에 계속 남는다.)
+  var mappingByKey = {};
+  mappings.forEach(function (mapping) { mappingByKey[mapping.mappingKey] = mapping; });
+  var previous = services.getPreviousSnapshot().filter(function (row) {
+    return rosterIds[String(row.studentId)] && mappingByKey[row.mappingKey];
+  });
+  previous.forEach(function (row) { row.reviewStatus = mappingByKey[row.mappingKey].reviewStatus; });
 
   var snapshotRows = previous.map(case_clone_);
   // 이전 스냅샷을 유지하는(원본 실패 등) 행에도 현재 측정값설정을 다시 적용한다.
