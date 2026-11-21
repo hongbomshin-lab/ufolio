@@ -47,6 +47,9 @@ test("reviewed mappings use the confirmed per-item metrics and targets", () => {
   assert.equal(mappings.CONS_ENDO_STAGE[2], "승인");
   assert.equal(mappings.CONS_ENDO_STAGE[9], "점수");
   assert.match(mappings.CONS_ENDO_STAGE[8], /Endodontic treatment\(practice\)/);
+  // 점수판: I=Resin 완료, J=Resin 예정, K=총 assign, L=Endo 완료, M=Endo 예정. 비교는 완료값으로 한다.
+  assert.equal(mappings.CONS_RESIN_STAGE.slice(5, 8).join(","), "VALUE(I),VALUE(J),VALUE(I)");
+  assert.equal(mappings.CONS_ENDO_STAGE.slice(5, 8).join(","), "VALUE(L),VALUE(M),VALUE(L)");
   // 보존 수술 점수는 점수판 F열이 기준이고, 전용 수술표 W열은 중복이라 비활성이다.
   assert.equal(mappings.CONS_OBS_SURG_SCORE[1], "Y");
   assert.equal(mappings.CONS_OBS_SURG_SCORE[2], "승인");
