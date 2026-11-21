@@ -162,11 +162,12 @@ test("prosthodontic cross-check mappings mirror PROS targets with lower priority
     assert.equal(mappings[right][2], "승인");
     assert.equal(mappings[right][1], "Y");
   }
-  // 차팅은 현황조사(PROS S열)와 유폴리오만 비교한다. 차팅 케이스 현황 시트는 실시간 현황조사용이라 비활성.
+  // 차팅은 현황조사(PROS S열) 제출건수와 차팅시트(PROS_CHART C열) 승인수를 각각 유폴리오와 비교한다.
   assert.equal(mappings.PROS_CHARTING[1], "Y");
   assert.equal(mappings.PROS_CHARTING[2], "승인");
-  assert.equal(mappings.PROS_CHART_32[1], "N");
-  assert.equal(mappings.PROS_CHART_32[2], "보류");
+  assert.equal(mappings.PROS_CHART_32[1], "Y");
+  assert.equal(mappings.PROS_CHART_32[2], "승인");
+  assert.equal(mappings.PROS_CHART_32[9], "승인수");
 });
 
 test("seed merge updates seed-owned columns, preserves admin columns and custom rows", () => {

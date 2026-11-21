@@ -55,12 +55,11 @@ test("default connections cover thirteen active sources and three inactive ones"
     "PROS", "PROS_CHART", "PROS_TOTAL", "RADIO",
   ].sort());
   assert.equal(new Set(keys).size, 16);
-  // IMPLANT 는 과거 학년 자료, CONS_SURGERY 는 수술 점수를 점수판 F열에서 받게 되어,
-  // PROS_CHART 는 실시간 현황조사용이라 비교에 쓰지 않게 되어 비활성이다.
-  const inactive = ["IMPLANT", "CONS_SURGERY", "PROS_CHART"];
+  // IMPLANT 는 과거 학년 자료, CONS_SURGERY 는 수술 점수를 점수판 F열에서 받게 되어 비활성이다.
+  const inactive = ["IMPLANT", "CONS_SURGERY"];
   assert.equal(objects.filter((row) => !inactive.includes(row["소스키"])).every((row) => row["활성"] === "Y"), true);
   assert.equal(objects.filter((row) => inactive.includes(row["소스키"])).every((row) => row["활성"] === "N"), true);
-  assert.equal(objects.filter((row) => row["활성"] === "Y").length, 13);
+  assert.equal(objects.filter((row) => row["활성"] === "Y").length, 14);
   assert.equal(objects.every((row) => row["스프레드시트 URL"] === ""), true);
   assert.equal(objects.every((row) => /^[A-Z]{1,3}$/.test(row["출석번호 열"]) && /^[A-Z]{1,3}$/.test(row["이름 열"])), true);
   assert.equal(objects.every((row) => Number.isInteger(row["데이터 시작행"]) && row["데이터 시작행"] >= 2), true);

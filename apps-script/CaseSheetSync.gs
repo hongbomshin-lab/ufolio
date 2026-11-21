@@ -29,7 +29,7 @@ var CASE_MEASUREMENT_HEADERS = ["실습차수", "과", "메뉴/구분", "항목"
 var CASE_PROS_CROSS_HEADERS = ["출석번호", "학번", "이름", "항목", "현황조사값", "개인별토탈값", "유폴리오값", "상태"];
 // 보철비교: 왼쪽=기존 현황조사(PROS), 오른쪽=개인별토탈(PROS_TOTAL) 시트. 두 값 모두 예정 포함 누적이다.
 // 비교결과의 가철·고정·임플은 완료값을 쓰므로 왼쪽은 누적 전용 매핑(PROS_CUM_*)을 읽는다.
-// 차팅 케이스 현황(PROS_CHART) 시트는 실시간 현황조사용이라 비교하지 않는다.
+// 차팅 케이스 현황(PROS_CHART) 시트는 비교결과에서 승인수로만 비교하고 보철비교에는 넣지 않는다.
 var CASE_PROS_CROSS_PAIRS = [
   { label: "가철 누적", left: "PROS_CUM_REMOVABLE", right: "PROS_TOTAL_REMOVABLE" },
   { label: "고정 누적", left: "PROS_CUM_FIXED", right: "PROS_TOTAL_FIXED" },
