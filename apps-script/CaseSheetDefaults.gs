@@ -86,8 +86,8 @@ function case_defaultMappings_() {
     })(),
     case_mapping_("CONS_ASSIST", "승인", "CONS_SCORE", "단타 assist 보존과", "VALUE(G)", "", "VALUE(G)", case_target_(cons, "증례별 임상참여", "단타 assist(보존과)"), "점수", "SUM", 70, ""),
     case_mapping_("CONS_CENTER_ASSIST", "승인", "CONS_SCORE", "단타 assist 원내생센터", "VALUE(H)", "", "VALUE(H)", case_target_(cons, "증례별 임상참여", "단타 assist(원내생진료센터 assist)"), "점수", "SUM", 70, ""),
-    case_mapping_("CONS_RESIN_STAGE", "승인", "CONS_SCORE", "Resin 완료 점수", "VALUE(I)", "", "VALUE(I)", [case_target_(cons, "증례별 임상참여", "Composite restoration(3급/4급)(practice)"), case_target_(cons, "증례별 임상참여", "Composite restoration(practice)"), case_target_(cons, "증례별 임상참여", "Composite restortion(2급)(Practice)")].join("\n"), "점수", "SUM", 50, "세 레진 practice 항목 점수 합계와 비교"),
-    case_mapping_("CONS_ENDO_STAGE", "승인", "CONS_SCORE", "Endo 완료 점수", "VALUE(J)", "", "VALUE(J)", case_target_(cons, "증례별 임상참여", "Endodontic treatment(practice)"), "점수", "SUM", 50, "완료 점수 비교"),
+    case_mapping_("CONS_RESIN_STAGE", "승인", "CONS_SCORE", "Resin 완료 점수", "VALUE(I)", "VALUE(J)", "VALUE(I)", [case_target_(cons, "증례별 임상참여", "Composite restoration(3급/4급)(practice)"), case_target_(cons, "증례별 임상참여", "Composite restoration(practice)"), case_target_(cons, "증례별 임상참여", "Composite restortion(2급)(Practice)")].join("\n"), "점수", "SUM", 50, "세 레진 practice 항목 점수 합계와 비교"),
+    case_mapping_("CONS_ENDO_STAGE", "승인", "CONS_SCORE", "Endo 완료 점수", "VALUE(L)", "VALUE(M)", "VALUE(L)", case_target_(cons, "증례별 임상참여", "Endodontic treatment(practice)"), "점수", "SUM", 50, "완료 점수 비교"),
 
     case_mapping_("PED_CHARTING", "승인", "PED_CHART", "소아 차팅 누적", "VALUE(D)", "", "VALUE(D)", case_target_(ped, "증례별 임상참여", "practice - Charting (교수님/전공의 진료 참여)"), "승인수", "SUM", 80, "비어 있지 않은 차팅 건수"),
 
