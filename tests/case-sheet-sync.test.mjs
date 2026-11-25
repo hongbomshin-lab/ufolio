@@ -144,6 +144,32 @@ test("stale snapshot rows follow the current measurement settings", () => {
   assert.equal(row.ufolioValue, 2);
 });
 
+test("previous snapshot rows of mappings turned off or back to 보류 leave the comparison", () => {
+  const sync = loadSync();
+  const target = "3학년 치의학 임상실습 2|보철과|증례별 임상참여|22. Charting";
+  const old = (mappingKey, sourceKey) => ({
+    sourceKey, mappingKey, attendanceNo: 1, studentId: "2024-00001", name: "학생일", label: mappingKey,
+    sourceValue: 3, reviewStatus: "승인", measurement: "승인수", ufolioTargets: target, aggregation: "SUM", priority: 50, status: "정상", stale: false,
+  });
+  const services = {
+    now: () => new Date("2026-08-06T03:00:00.000Z"),
+    getConnections: () => [],
+    getMappings: () => [
+      mapping({ mappingKey: "OFF", sourceKey: "CHART", active: "N", ufolioTargets: target }),
+      mapping({ mappingKey: "HELD", sourceKey: "CHART", reviewStatus: "보류", ufolioTargets: target }),
+    ],
+    getRoster: () => [{ attendanceNo: 1, studentId: "2024-00001", name: "학생일" }],
+    getPreviousSnapshot: () => [old("OFF", "CHART"), old("HELD", "CHART")],
+    getLatestUfolio: () => ({ [`2024-00001|${target}`]: latestRecord(3) }),
+    readSource: () => [],
+  };
+
+  const result = sync.case_refreshAll_(services);
+  assert.equal(result.comparisonRows.length, 0);
+  assert.deepEqual(result.snapshotRows.map((row) => row.mappingKey), ["HELD"]);
+  assert.equal(result.snapshotRows[0].reviewStatus, "보류");
+});
+
 test("refresh excludes name mismatches and keeps unapproved mappings out of the comparison", () => {
   const sync = loadSync();
   const services = {
